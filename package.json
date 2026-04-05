@@ -1,0 +1,10 @@
+{
+  "name": "hackernews",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @hackernews/web dev",
+    "build": "pnpm --filter @hackernews/core build && pnpm --filter @hackernews/web build",
+    "test": "pnpm -r test",
+    "test:core": "pnpm --filter @hackernews/core test"
+  }
+}
