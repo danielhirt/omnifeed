@@ -1,0 +1,94 @@
+<script lang="ts">
+  import type { Collection } from '@hackernews/core'
+  import { DEFAULT_COLLECTION_ID } from '@hackernews/core'
+  import {
+    getCollections,
+    addToCollection,
+    removeFromCollection,
+    getCollectionsForItem,
+  } from '$lib/collections.svelte'
+  import CollectionPicker from './CollectionPicker.svelte'
+
+  let { itemId }: { itemId: number } = $props()
+
+  const cols = getCollections()
+
+  let itemCollections: Collection[] = $state([])
+  let showPicker = $state(false)
+  let saved = $derived(itemCollections.length > 0)
+
+  $effect(() => {
+    loadItemCollections(itemId)
+  })
+
+  async function loadItemCollections(id: number) {
+    itemCollections = await getCollectionsForItem(id)
+  }
+
+  async function handleClick(e: MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (cols.value.length <= 1) {
+      if (saved) {
+        await removeFromCollection(DEFAULT_COLLECTION_ID, itemId)
+      } else {
+        await addToCollection(DEFAULT_COLLECTION_ID, itemId)
+      }
+      await loadItemCollections(itemId)
+    } else {
+      showPicker = !showPicker
+    }
+  }
+
+  async function handleSelect(collectionId: string) {
+    const isMember = itemCollections.some((c) => c.id === collectionId)
+    if (isMember) {
+      await removeFromCollection(collectionId, itemId)
+    } else {
+      await addToCollection(collectionId, itemId)
+    }
+    await loadItemCollections(itemId)
+  }
+</script>
+
+<div class="save-wrapper">
+  <button
+    class="save-btn"
+    class:saved
+    onclick={handleClick}
+    title={saved ? 'Saved' : 'Save'}
+  >
+    {saved ? '★' : '☆'}
+  </button>
+  {#if showPicker}
+    <CollectionPicker
+      collections={cols.value}
+      {itemCollections}
+      onselect={handleSelect}
+      onclose={() => (showPicker = false)}
+    />
+  {/if}
+</div>
+
+<style>
+  .save-wrapper {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .save-btn {
+    font-size: 1.25rem;
+    padding: var(--space-xs);
+    color: var(--color-text-faint);
+    transition: color 0.15s;
+  }
+
+  .save-btn:hover {
+    color: var(--color-accent);
+  }
+
+  .save-btn.saved {
+    color: var(--color-accent);
+  }
+</style>

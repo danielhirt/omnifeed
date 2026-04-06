@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Story } from '@hackernews/core'
   import { timeAgo, domainFrom } from '$lib/time'
+  import SaveButton from './SaveButton.svelte'
 
   let { story, index, selected = false }: { story: Story; index: number; selected?: boolean } = $props()
 
@@ -35,12 +36,14 @@
       {/if}
     </div>
   </div>
+  <SaveButton itemId={story.id} />
 </a>
 
 <style>
   .story-card {
     display: flex;
     align-items: flex-start;
+    justify-content: space-between;
     padding: var(--space-md);
     border-bottom: 1px solid var(--color-border);
     text-decoration: none;
