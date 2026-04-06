@@ -5,32 +5,25 @@
 
 <style>
   .skeleton-card {
-    padding: var(--space-md);
+    padding: 6px 0;
     border-bottom: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
+    gap: 4px;
   }
 
   .skeleton-title,
   .skeleton-meta {
-    border-radius: var(--radius-sm);
     background: var(--color-surface);
-    animation: pulse 1.5s ease-in-out infinite;
   }
 
   .skeleton-title {
-    height: 1.25rem;
-    width: 75%;
+    height: 0.95rem;
+    width: 70%;
   }
 
   .skeleton-meta {
-    height: 0.875rem;
-    width: 50%;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 0.8; }
+    height: 0.75rem;
+    width: 40%;
   }
 </style>

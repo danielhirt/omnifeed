@@ -27,7 +27,7 @@
       <div class="color-dot" style="background: {col.color}"></div>
       <span>{col.name}</span>
       {#if memberIds.has(col.id)}
-        <span class="check">✓</span>
+        <span class="check">*</span>
       {/if}
     </button>
   {/each}
@@ -47,19 +47,16 @@
     z-index: 201;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    min-width: 180px;
-    padding: var(--space-xs);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    min-width: 160px;
+    padding: 2px;
   }
 
   .picker-item {
     display: flex;
     align-items: center;
-    gap: var(--space-sm);
+    gap: 8px;
     width: 100%;
-    padding: var(--space-sm);
-    border-radius: var(--radius-sm);
+    padding: 4px 8px;
     font-size: 0.85rem;
     text-align: left;
   }
@@ -73,9 +70,8 @@
   }
 
   .color-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
+    width: 8px;
+    height: 8px;
     flex-shrink: 0;
   }
 

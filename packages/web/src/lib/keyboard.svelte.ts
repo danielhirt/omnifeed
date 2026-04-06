@@ -1,5 +1,6 @@
 import { goto } from '$app/navigation'
 import type { FeedType } from '@hackernews/core'
+import { refreshFeed } from '$lib/feed.svelte'
 
 const feedKeys: Record<string, FeedType> = {
   '1': 'top',
@@ -62,9 +63,8 @@ export function handleKeydown(e: KeyboardEvent) {
     case 'o': {
       e.preventDefault()
       const card = document.querySelector(`[data-index="${state.selectedIndex}"]`) as HTMLAnchorElement
-      const storyLink = card?.querySelector('.title a') as HTMLAnchorElement
-      if (storyLink) {
-        window.open(storyLink.href, '_blank')
+      if (card?.href) {
+        goto(card.getAttribute('href')!)
       }
       break
     }
@@ -80,6 +80,10 @@ export function handleKeydown(e: KeyboardEvent) {
         `[data-index="${state.selectedIndex}"] .save-btn`
       ) as HTMLButtonElement
       saveBtn?.click()
+      break
+    case 'r':
+      e.preventDefault()
+      refreshFeed()
       break
   }
 }

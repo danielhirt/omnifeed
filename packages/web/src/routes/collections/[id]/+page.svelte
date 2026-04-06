@@ -40,24 +40,24 @@
     <div class="header">
       <div class="color-dot" style="background: {collection.color}"></div>
       <h1>{collection.name}</h1>
-      <span class="count">{collection.itemIds.length} items</span>
+      <span class="count">{collection.itemIds.length}</span>
     </div>
 
     {#if loading}
-      <p class="loading">Loading stories...</p>
+      <p class="loading">loading...</p>
     {:else if stories.length === 0}
-      <p class="empty">No saved stories in this collection yet.</p>
+      <p class="empty">Empty.</p>
     {:else}
       {#each stories as story, i (story.id)}
         <div class="saved-story">
           <StoryCard {story} index={i} />
-          <button class="remove-btn" onclick={() => handleRemove(story.id)}>Remove</button>
+          <button class="remove-btn" onclick={() => handleRemove(story.id)}>[x]</button>
         </div>
       {/each}
     {/if}
   </div>
 {:else}
-  <p class="not-found">Collection not found.</p>
+  <p class="not-found">Not found.</p>
 {/if}
 
 <style>
@@ -68,27 +68,26 @@
 
   .header {
     display: flex;
-    align-items: center;
-    gap: var(--space-md);
-    padding-bottom: var(--space-lg);
+    align-items: baseline;
+    gap: 10px;
+    padding-bottom: 12px;
     border-bottom: 1px solid var(--color-border);
-    margin-bottom: var(--space-md);
+    margin-bottom: 8px;
   }
 
   .color-dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
+    width: 8px;
+    height: 8px;
     flex-shrink: 0;
   }
 
   h1 {
-    font-size: 1.5rem;
+    font-size: 1.1rem;
     font-weight: 600;
   }
 
   .count {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: var(--color-text-faint);
   }
 
@@ -96,7 +95,7 @@
   .empty,
   .not-found {
     color: var(--color-text-muted);
-    padding: var(--space-lg) 0;
+    padding: 16px 0;
   }
 
   .saved-story {
@@ -109,13 +108,14 @@
   }
 
   .remove-btn {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
     color: var(--color-text-faint);
-    padding: var(--space-xs) var(--space-sm);
+    padding: 2px 6px;
     flex-shrink: 0;
   }
 
   .remove-btn:hover {
-    color: #ef4444;
+    color: var(--color-danger);
   }
 </style>

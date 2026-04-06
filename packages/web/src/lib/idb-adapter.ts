@@ -19,16 +19,30 @@ export class IdbStorageAdapter implements StorageAdapter {
       },
     })
 
+    // Migrate old 'saved' collection to 'favorites'
+    const old = await this.db.get(STORE_NAME, 'saved')
+    if (old) {
+      await this.db.delete(STORE_NAME, 'saved')
+      old.id = DEFAULT_COLLECTION_ID
+      old.name = 'Favorites'
+      old.color = COLLECTION_COLORS[2]
+      await this.saveCollection(old)
+    }
+
     const existing = await this.getCollection(DEFAULT_COLLECTION_ID)
     if (!existing) {
       await this.saveCollection({
         id: DEFAULT_COLLECTION_ID,
-        name: 'Saved',
-        color: COLLECTION_COLORS[5],
+        name: 'Favorites',
+        color: COLLECTION_COLORS[2],
         itemIds: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
+    } else if (existing.name !== 'Favorites' || existing.color !== COLLECTION_COLORS[2]) {
+      existing.name = 'Favorites'
+      existing.color = COLLECTION_COLORS[2]
+      await this.saveCollection(existing)
     }
   }
 

@@ -59,7 +59,7 @@
     onclick={handleClick}
     title={saved ? 'Saved' : 'Save'}
   >
-    {saved ? '★' : '☆'}
+    {saved ? '●' : '○'}
   </button>
   {#if showPicker}
     <CollectionPicker
@@ -75,17 +75,22 @@
   .save-wrapper {
     position: relative;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
   }
 
   .save-btn {
-    font-size: 1.25rem;
-    padding: var(--space-xs);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    width: 28px;
+    height: 28px;
     color: var(--color-text-faint);
-    transition: color 0.15s;
   }
 
   .save-btn:hover {
-    color: var(--color-accent);
+    color: var(--color-text);
   }
 
   .save-btn.saved {

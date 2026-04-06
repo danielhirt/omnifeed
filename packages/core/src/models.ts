@@ -67,4 +67,4 @@ export const COLLECTION_COLORS = [
   '#78716c', // stone
 ] as const
 
-export const DEFAULT_COLLECTION_ID = 'saved'
+export const DEFAULT_COLLECTION_ID = 'favorites'

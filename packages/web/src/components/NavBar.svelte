@@ -1,14 +1,15 @@
 <script lang="ts">
   import type { FeedType } from '@hackernews/core'
   import { page } from '$app/state'
+  import { refreshFeed } from '$lib/feed.svelte'
 
   const feeds: { type: FeedType; label: string; key: string }[] = [
-    { type: 'top', label: 'Top', key: '1' },
-    { type: 'new', label: 'New', key: '2' },
-    { type: 'best', label: 'Best', key: '3' },
-    { type: 'ask', label: 'Ask', key: '4' },
-    { type: 'show', label: 'Show', key: '5' },
-    { type: 'job', label: 'Jobs', key: '6' },
+    { type: 'top', label: 'top', key: '1' },
+    { type: 'new', label: 'new', key: '2' },
+    { type: 'best', label: 'best', key: '3' },
+    { type: 'ask', label: 'ask', key: '4' },
+    { type: 'show', label: 'show', key: '5' },
+    { type: 'job', label: 'jobs', key: '6' },
   ]
 
   let currentFeed = $derived(
@@ -24,68 +25,70 @@
         href="/?feed={feed.type}"
         class="tab"
         class:active={currentFeed === feed.type}
-        title="Press {feed.key} to switch"
+        title="{feed.key}"
       >
         {feed.label}
       </a>
     {/each}
   </div>
-  <a href="/collections" class="collections-link">Collections</a>
+  <div class="nav-links">
+    <button class="nav-link" onclick={refreshFeed} title="Refresh feed (r)">refresh</button>
+    <a href="/collections" class="nav-link">collections</a>
+  </div>
 </nav>
 
 <style>
   .navbar {
-    display: flex;
-    align-items: center;
-    gap: var(--space-md);
-    padding: var(--space-md) var(--space-lg);
-    background: var(--color-surface);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: baseline;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--color-border);
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    max-width: var(--max-width);
+    margin: 0 auto;
   }
 
   .logo {
     font-weight: 700;
-    font-size: 1.25rem;
+    font-size: 1rem;
     color: var(--color-accent);
     text-decoration: none;
+    letter-spacing: -0.02em;
   }
 
   .feed-tabs {
     display: flex;
-    gap: var(--space-xs);
+    gap: 16px;
+    justify-content: center;
   }
 
   .tab {
-    padding: var(--space-xs) var(--space-sm);
-    border-radius: var(--radius-sm);
     color: var(--color-text-muted);
-    font-size: 0.875rem;
-    font-weight: 500;
+    font-size: 0.9rem;
     text-decoration: none;
-    transition: background 0.15s, color 0.15s;
   }
 
   .tab:hover {
-    background: var(--color-surface-hover);
     color: var(--color-text);
   }
 
   .tab.active {
-    background: var(--color-accent);
-    color: var(--color-bg);
+    color: var(--color-accent);
   }
 
-  .collections-link {
-    margin-left: auto;
-    font-size: 0.875rem;
-    color: var(--color-text-muted);
+  .nav-links {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+  }
+
+  .nav-link {
+    font-size: 0.85rem;
+    color: var(--color-text-faint);
     text-decoration: none;
   }
 
-  .collections-link:hover {
+  .nav-link:hover {
     color: var(--color-text);
   }
 </style>

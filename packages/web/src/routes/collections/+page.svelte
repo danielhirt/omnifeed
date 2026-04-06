@@ -47,7 +47,7 @@
   <div class="header">
     <h1>Collections</h1>
     <button class="create-btn" onclick={() => (showCreate = !showCreate)}>
-      {showCreate ? 'Cancel' : '+ New Collection'}
+      {showCreate ? 'cancel' : '+ new'}
     </button>
   </div>
 
@@ -56,7 +56,7 @@
       <input
         type="text"
         bind:value={newName}
-        placeholder="Collection name"
+        placeholder="name"
         class="name-input"
       />
       <div class="color-picker">
@@ -67,10 +67,11 @@
             class:selected={newColor === color}
             style="background: {color}"
             onclick={() => (newColor = color)}
+            aria-label="Color {color}"
           ></button>
         {/each}
       </div>
-      <button type="submit" class="submit-btn">Create</button>
+      <button type="submit" class="submit-btn">create</button>
     </form>
   {/if}
 
@@ -86,20 +87,20 @@
               class="edit-input"
               onkeydown={(e) => { if (e.key === 'Enter') finishEdit(col.id); if (e.key === 'Escape') editingId = null; }}
             />
-            <button class="action-btn" onclick={() => finishEdit(col.id)}>Save</button>
+            <button class="action-btn" onclick={() => finishEdit(col.id)}>save</button>
           {:else}
             <a href="/collections/{col.id}" class="collection-name">{col.name}</a>
-            <span class="item-count">{col.itemIds.length} items</span>
+            <span class="item-count">{col.itemIds.length}</span>
           {/if}
         </div>
         <div class="collection-actions">
           {#if col.id !== DEFAULT_COLLECTION_ID}
-            <button class="action-btn" onclick={() => startEdit(col.id, col.name)}>Rename</button>
+            <button class="action-btn" onclick={() => startEdit(col.id, col.name)}>rename</button>
             {#if confirmDeleteId === col.id}
-              <button class="action-btn danger" onclick={() => handleDelete(col.id)}>Confirm</button>
-              <button class="action-btn" onclick={() => (confirmDeleteId = null)}>Cancel</button>
+              <button class="action-btn danger" onclick={() => handleDelete(col.id)}>confirm</button>
+              <button class="action-btn" onclick={() => (confirmDeleteId = null)}>cancel</button>
             {:else}
-              <button class="action-btn" onclick={() => (confirmDeleteId = col.id)}>Delete</button>
+              <button class="action-btn" onclick={() => (confirmDeleteId = col.id)}>delete</button>
             {/if}
           {/if}
         </div>
@@ -112,7 +113,7 @@
   .collections-page {
     display: flex;
     flex-direction: column;
-    gap: var(--space-lg);
+    gap: 16px;
   }
 
   .header {
@@ -122,50 +123,49 @@
   }
 
   h1 {
-    font-size: 1.5rem;
+    font-size: 1.1rem;
     font-weight: 600;
   }
 
   .create-btn {
-    padding: var(--space-sm) var(--space-md);
-    background: var(--color-accent);
-    color: var(--color-bg);
-    font-weight: 500;
-    border-radius: var(--radius-sm);
-    font-size: 0.875rem;
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .create-btn:hover {
+    color: var(--color-text);
+    border-color: var(--color-text-faint);
   }
 
   .create-form {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm);
-    padding: var(--space-md);
-    background: var(--color-surface);
-    border-radius: var(--radius-md);
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--color-border);
   }
 
   .name-input,
   .edit-input {
-    padding: var(--space-sm);
+    padding: 4px 8px;
     background: var(--color-bg);
     color: var(--color-text);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
     font-family: inherit;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
   }
 
   .color-picker {
     display: flex;
-    gap: var(--space-xs);
+    gap: 4px;
   }
 
   .color-swatch {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    transition: border-color 0.15s;
+    width: 20px;
+    height: 20px;
+    border: 1px solid transparent;
   }
 
   .color-swatch.selected {
@@ -174,12 +174,14 @@
 
   .submit-btn {
     align-self: flex-start;
-    padding: var(--space-sm) var(--space-md);
-    background: var(--color-accent);
-    color: var(--color-bg);
-    font-weight: 500;
-    border-radius: var(--radius-sm);
-    font-size: 0.875rem;
+    padding: 4px 12px;
+    border: 1px solid var(--color-border);
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .submit-btn:hover {
+    color: var(--color-text);
   }
 
   .collection-list {
@@ -190,61 +192,58 @@
   .collection-item {
     display: flex;
     align-items: center;
-    gap: var(--space-md);
-    padding: var(--space-md);
+    gap: 10px;
+    padding: 6px 0;
     border-bottom: 1px solid var(--color-border);
   }
 
   .color-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
+    width: 8px;
+    height: 8px;
     flex-shrink: 0;
   }
 
   .collection-info {
     flex: 1;
     display: flex;
-    align-items: center;
-    gap: var(--space-sm);
+    align-items: baseline;
+    gap: 8px;
   }
 
   .collection-name {
-    font-weight: 500;
     color: var(--color-text);
     text-decoration: none;
   }
 
   .collection-name:hover {
-    color: var(--color-accent);
+    color: var(--color-link-hover);
   }
 
   .item-count {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: var(--color-text-faint);
   }
 
   .collection-actions {
     display: flex;
-    gap: var(--space-xs);
+    gap: 4px;
   }
 
   .action-btn {
-    font-size: 0.8rem;
-    color: var(--color-text-muted);
-    padding: var(--space-xs) var(--space-sm);
-    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    color: var(--color-text-faint);
+    padding: 2px 6px;
   }
 
   .action-btn:hover {
-    background: var(--color-surface-hover);
+    color: var(--color-text-muted);
   }
 
   .action-btn.danger {
-    color: #ef4444;
+    color: var(--color-danger);
   }
 
   .edit-input {
-    width: 200px;
+    width: 180px;
   }
 </style>

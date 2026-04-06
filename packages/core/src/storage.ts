@@ -14,8 +14,8 @@ export interface StorageAdapter {
 function createDefaultCollection(): Collection {
   return {
     id: DEFAULT_COLLECTION_ID,
-    name: 'Saved',
-    color: COLLECTION_COLORS[5], // blue
+    name: 'Favorites',
+    color: COLLECTION_COLORS[2], // yellow
     itemIds: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),

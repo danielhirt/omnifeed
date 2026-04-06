@@ -13,6 +13,11 @@ export class FeedManager {
 
   constructor(private client: HnClient) {}
 
+  clearCache(): void {
+    this.feedIdsCache.clear()
+    this.itemCache.clear()
+  }
+
   async fetchPage(endpoint: string, page: number): Promise<Story[]> {
     const ids = await this.getFeedIds(endpoint)
     const start = page * PAGE_SIZE

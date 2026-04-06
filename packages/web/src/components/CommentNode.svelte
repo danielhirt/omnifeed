@@ -1,4 +1,3 @@
-<!-- packages/web/src/components/CommentNode.svelte -->
 <script lang="ts">
   import type { Comment } from '@hackernews/core'
   import { timeAgo } from '$lib/time'
@@ -17,35 +16,24 @@
   } = $props()
 
   let collapsed = $state(false)
-
-  const depthColors = [
-    'var(--color-accent)',
-    '#60a5fa',
-    '#34d399',
-    '#a78bfa',
-    '#f472b6',
-    '#fb923c',
-  ]
-
-  let guideColor = $derived(depthColors[depth % depthColors.length])
   let isFocused = $derived(focusPath.includes(comment.id))
 </script>
 
 {#if !comment.deleted && !comment.dead}
   <div class="comment-node" class:focused={isFocused}>
     {#if depth > 0}
-      <div class="indent-guide" style="border-color: {guideColor}"></div>
+      <div class="indent-guide"></div>
     {/if}
     <div class="comment-content">
       <div class="comment-header">
         <button class="collapse-toggle" onclick={() => (collapsed = !collapsed)}>
-          {collapsed ? '▸' : '▾'}
+          {collapsed ? '[+]' : '[-]'}
         </button>
         <span class="author">{comment.by}</span>
         <span class="time">{timeAgo(comment.time)}</span>
         {#if onfocus}
-          <button class="focus-btn" onclick={() => onfocus(comment.id)} title="Focus this thread">
-            ⊕
+          <button class="focus-btn" onclick={() => onfocus(comment.id)} title="Focus thread">
+            [f]
           </button>
         {/if}
       </div>
@@ -71,20 +59,19 @@
 <style>
   .comment-node {
     display: flex;
-    gap: var(--space-sm);
-    padding-top: var(--space-sm);
+    gap: 8px;
+    padding-top: 6px;
   }
 
   .comment-node.focused {
     background: var(--color-surface-hover);
-    border-radius: var(--radius-sm);
   }
 
   .indent-guide {
     flex-shrink: 0;
     width: 0;
-    border-left: 2px solid;
-    margin-left: var(--space-sm);
+    border-left: 1px solid var(--color-border);
+    margin-left: 8px;
   }
 
   .comment-content {
@@ -92,14 +79,14 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--space-xs);
+    gap: 2px;
   }
 
   .comment-header {
     display: flex;
     align-items: center;
-    gap: var(--space-sm);
-    font-size: 0.8rem;
+    gap: 6px;
+    font-size: 0.85rem;
   }
 
   .collapse-toggle {
@@ -107,11 +94,12 @@
     color: var(--color-text-faint);
     padding: 0;
     line-height: 1;
+    font-family: var(--font-mono);
   }
 
   .author {
-    color: var(--color-accent);
-    font-weight: 500;
+    color: var(--color-text);
+    font-weight: 600;
   }
 
   .time {
@@ -121,42 +109,44 @@
   .focus-btn {
     color: var(--color-text-faint);
     font-size: 0.75rem;
+    font-family: var(--font-mono);
     padding: 0;
+    line-height: 1;
     opacity: 0;
-    transition: opacity 0.15s;
   }
 
-  .comment-node:hover .focus-btn {
+  .comment-header:hover .focus-btn {
     opacity: 1;
   }
 
   .comment-body {
-    font-size: 0.9rem;
-    line-height: 1.6;
+    font-size: 0.95rem;
+    line-height: 1.5;
     color: var(--color-text);
     overflow-wrap: break-word;
   }
 
   .comment-body :global(a) {
     color: var(--color-link);
+    text-decoration: underline;
   }
+
 
   .comment-body :global(pre) {
     background: var(--color-surface);
-    padding: var(--space-sm);
-    border-radius: var(--radius-sm);
+    padding: 8px;
     overflow-x: auto;
     font-family: var(--font-mono);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--color-border);
   }
 
   .comment-body :global(p) {
-    margin-bottom: var(--space-sm);
+    margin-bottom: 6px;
   }
 
   .collapsed-hint {
     font-size: 0.75rem;
     color: var(--color-text-faint);
-    font-style: italic;
   }
 </style>
