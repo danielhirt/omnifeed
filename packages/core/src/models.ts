@@ -2,6 +2,7 @@ export interface Story {
   id: number
   title: string
   url?: string
+  text?: string
   score: number
   by: string
   time: number
@@ -26,6 +27,7 @@ export interface User {
   created: number
   karma: number
   about?: string
+  submitted?: number[]
 }
 
 export interface Collection {

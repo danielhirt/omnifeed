@@ -7,12 +7,12 @@
   const theme = getTheme()
 
   const feeds: { type: FeedType; label: string; key: string }[] = [
-    { type: 'top', label: 'top', key: '1' },
-    { type: 'new', label: 'new', key: '2' },
-    { type: 'best', label: 'best', key: '3' },
-    { type: 'ask', label: 'ask', key: '4' },
-    { type: 'show', label: 'show', key: '5' },
-    { type: 'job', label: 'jobs', key: '6' },
+    { type: 'top', label: 'Top', key: '1' },
+    { type: 'new', label: 'New', key: '2' },
+    { type: 'best', label: 'Best', key: '3' },
+    { type: 'ask', label: 'Ask', key: '4' },
+    { type: 'show', label: 'Show', key: '5' },
+    { type: 'job', label: 'Jobs', key: '6' },
   ]
 
   let currentFeed = $derived(
@@ -35,8 +35,9 @@
     {/each}
   </div>
   <div class="nav-links">
-    <button class="nav-link" onclick={refreshFeed} title="Refresh feed (r)">refresh</button>
-    <a href="/collections" class="nav-link">collections</a>
+    <button class="nav-link" onclick={refreshFeed} title="Refresh feed (r)">Refresh</button>
+    <a href="/collections" class="nav-link">Collections</a>
+    <a href="/settings" class="nav-link">Settings</a>
     <button class="nav-link theme-toggle" onclick={toggleTheme} title="Toggle theme">
       {theme.value === 'dark' ? '☀' : '☾'}
     </button>

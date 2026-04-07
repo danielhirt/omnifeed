@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../app.css'
   import NavBar from '../components/NavBar.svelte'
+  import ScrollToTop from '../components/ScrollToTop.svelte'
   import { handleKeydown } from '$lib/keyboard.svelte'
 
   let { children } = $props()
@@ -25,6 +26,7 @@
 <main class="main">
   {@render children()}
 </main>
+<ScrollToTop />
 </div>
 
 <style>

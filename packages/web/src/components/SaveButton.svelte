@@ -88,7 +88,7 @@
   }
 
   .save-btn:hover {
-    color: var(--color-text);
+    color: var(--color-accent);
   }
 
 

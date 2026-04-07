@@ -1,0 +1,151 @@
+import { spawn } from 'node:child_process'
+import { HnClient, type Story, type Comment } from '@hackernews/core'
+import type { RequestHandler } from './$types'
+
+const MAX_COMMENTS = 30
+const MAX_ARTICLE_CHARS = 8000
+
+function stripHtml(html: string): string {
+  return html
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+async function fetchArticleText(url: string, fetchFn: typeof fetch): Promise<string> {
+  try {
+    const res = await fetchFn(url, {
+      headers: { 'User-Agent': 'HN-Reader-Summarizer/1.0' },
+      signal: AbortSignal.timeout(10000),
+    })
+    if (!res.ok) return ''
+    const contentType = res.headers.get('content-type') ?? ''
+    if (!contentType.includes('text/html')) return ''
+    const html = await res.text()
+    const text = stripHtml(html)
+    return text.slice(0, MAX_ARTICLE_CHARS)
+  } catch {
+    return ''
+  }
+}
+
+async function fetchCommentTree(client: HnClient, ids: number[], depth = 0): Promise<Comment[]> {
+  if (!ids.length || depth > 1) return []
+  const items = await Promise.all(ids.map((id) => client.fetchItem(id)))
+  const comments: Comment[] = []
+  for (const item of items) {
+    if (!item || !('parent' in item) || item.deleted || item.dead) continue
+    const comment = item as Comment
+    comments.push(comment)
+    if (comment.kids?.length && comments.length < MAX_COMMENTS) {
+      const children = await fetchCommentTree(client, comment.kids.slice(0, 5), depth + 1)
+      comments.push(...children)
+    }
+    if (comments.length >= MAX_COMMENTS) break
+  }
+  return comments.slice(0, MAX_COMMENTS)
+}
+
+function buildPrompt(story: Story, articleText: string, comments: Comment[]): string {
+  let context = `Analyze the following Hacker News post. Provide a concise summary covering:
+1. What the post/article is about (2-3 sentences)
+2. Key takeaways or interesting points
+3. Notable themes or perspectives from the discussion (if comments are present)
+
+Be direct and informative. Use markdown formatting.
+
+# "${story.title}"
+By ${story.by} | ${story.score} points | ${story.descendants ?? 0} comments\n`
+
+  if (story.text) {
+    context += `\n## Post text\n${stripHtml(story.text)}\n`
+  }
+
+  if (articleText) {
+    context += `\n## Linked article content\n${articleText}\n`
+  }
+
+  if (comments.length > 0) {
+    context += `\n## Discussion (top comments)\n`
+    for (const c of comments) {
+      context += `- ${c.by}: ${stripHtml(c.text)}\n`
+    }
+  }
+
+  return context
+}
+
+const MODEL_MAP: Record<string, string> = {
+  haiku: 'claude-haiku-4-5-20251001',
+  sonnet: 'claude-sonnet-4-6',
+  opus: 'claude-opus-4-6',
+}
+
+function runClaude(prompt: string, model = 'sonnet'): Promise<string> {
+  const modelId = MODEL_MAP[model] ?? MODEL_MAP.sonnet
+  return new Promise((resolve, reject) => {
+    const proc = spawn('claude', ['-p', '--output-format', 'text', '--model', modelId], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin:' + (process.env.HOME ?? '') + '/.local/bin' },
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    proc.stdout.on('data', (data: Buffer) => { stdout += data.toString() })
+    proc.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve(stdout)
+      } else {
+        reject(new Error(stderr || `claude exited with code ${code}`))
+      }
+    })
+
+    proc.on('error', reject)
+
+    proc.stdin.write(prompt)
+    proc.stdin.end()
+  })
+}
+
+export const POST: RequestHandler = async ({ request, fetch: skFetch }) => {
+  const { storyId, model } = await request.json()
+  if (!storyId) {
+    return new Response('Missing storyId', { status: 400 })
+  }
+
+  const client = new HnClient(skFetch)
+
+  const item = await client.fetchItem(storyId)
+  if (!item || !('title' in item)) {
+    return new Response('Story not found', { status: 404 })
+  }
+  const story = item as Story
+
+  const [articleText, comments] = await Promise.all([
+    story.url ? fetchArticleText(story.url, skFetch) : Promise.resolve(''),
+    story.kids?.length ? fetchCommentTree(client, story.kids.slice(0, 15)) : Promise.resolve([]),
+  ])
+
+  const prompt = buildPrompt(story, articleText, comments)
+
+  try {
+    const result = await runClaude(prompt, model)
+    return new Response(result, {
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return new Response(message, { status: 502 })
+  }
+}

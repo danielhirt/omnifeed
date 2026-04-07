@@ -37,7 +37,7 @@
     <div class="meta">
       <span class="score">{story.score}</span>
       <span class="sep">|</span>
-      <span>{story.by}</span>
+      <button class="author" onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/user/${story.by}` }}>{story.by}</button>
       <span class="sep">|</span>
       <span>{timeAgo(story.time)}</span>
       {#if story.descendants > 0}
@@ -149,6 +149,15 @@
   }
 
   .open-link:hover {
+    color: var(--color-accent);
+  }
+
+  .author {
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+
+  .author:hover {
     color: var(--color-accent);
   }
 

@@ -47,7 +47,7 @@
   <div class="header">
     <h1>Collections</h1>
     <button class="create-btn" onclick={() => (showCreate = !showCreate)}>
-      {showCreate ? 'cancel' : '+ new'}
+      {showCreate ? 'Cancel' : '+ New'}
     </button>
   </div>
 
@@ -56,7 +56,7 @@
       <input
         type="text"
         bind:value={newName}
-        placeholder="name"
+        placeholder="Name"
         class="name-input"
       />
       <div class="color-picker">
@@ -71,7 +71,7 @@
           ></button>
         {/each}
       </div>
-      <button type="submit" class="submit-btn">create</button>
+      <button type="submit" class="submit-btn">Create</button>
     </form>
   {/if}
 
@@ -87,7 +87,7 @@
               class="edit-input"
               onkeydown={(e) => { if (e.key === 'Enter') finishEdit(col.id); if (e.key === 'Escape') editingId = null; }}
             />
-            <button class="action-btn" onclick={() => finishEdit(col.id)}>save</button>
+            <button class="action-btn" onclick={() => finishEdit(col.id)}>Save</button>
           {:else}
             <a href="/collections/{col.id}" class="collection-name">{col.name}</a>
             <span class="item-count">{col.itemIds.length}</span>
@@ -95,12 +95,12 @@
         </div>
         <div class="collection-actions">
           {#if col.id !== DEFAULT_COLLECTION_ID}
-            <button class="action-btn" onclick={() => startEdit(col.id, col.name)}>rename</button>
+            <button class="action-btn" onclick={() => startEdit(col.id, col.name)}>Rename</button>
             {#if confirmDeleteId === col.id}
-              <button class="action-btn danger" onclick={() => handleDelete(col.id)}>confirm</button>
-              <button class="action-btn" onclick={() => (confirmDeleteId = null)}>cancel</button>
+              <button class="action-btn danger" onclick={() => handleDelete(col.id)}>Confirm</button>
+              <button class="action-btn" onclick={() => (confirmDeleteId = null)}>Cancel</button>
             {:else}
-              <button class="action-btn" onclick={() => (confirmDeleteId = col.id)}>delete</button>
+              <button class="action-btn" onclick={() => (confirmDeleteId = col.id)}>Delete</button>
             {/if}
           {/if}
         </div>

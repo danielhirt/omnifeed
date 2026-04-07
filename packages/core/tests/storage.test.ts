@@ -13,7 +13,7 @@ describe('InMemoryStorageAdapter', () => {
     const collections = await storage.getCollections()
     expect(collections).toHaveLength(1)
     expect(collections[0].id).toBe(DEFAULT_COLLECTION_ID)
-    expect(collections[0].name).toBe('Saved')
+    expect(collections[0].name).toBe('Favorites')
   })
 
   it('creates a new collection', async () => {
@@ -32,7 +32,7 @@ describe('InMemoryStorageAdapter', () => {
   it('gets a collection by id', async () => {
     const result = await storage.getCollection(DEFAULT_COLLECTION_ID)
     expect(result).not.toBeNull()
-    expect(result!.name).toBe('Saved')
+    expect(result!.name).toBe('Favorites')
   })
 
   it('returns null for missing collection', async () => {

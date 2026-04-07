@@ -29,9 +29,9 @@
         <button class="collapse-toggle" onclick={() => (collapsed = !collapsed)}>
           {collapsed ? '[+]' : '[-]'}
         </button>
-        <span class="author">{comment.by}</span>
+        <a href="/user/{comment.by}" class="author">{comment.by}</a>
         <span class="time">{timeAgo(comment.time)}</span>
-        {#if onfocus}
+        {#if onfocus && comment.kids?.length}
           <button class="focus-btn" onclick={() => onfocus(comment.id)} title="Focus thread">
             [f]
           </button>
@@ -65,6 +65,8 @@
 
   .comment-node.focused {
     background: var(--color-surface-hover);
+    padding: 6px 8px;
+    border-radius: 4px;
   }
 
   .indent-guide {
@@ -100,6 +102,11 @@
   .author {
     color: var(--color-text);
     font-weight: 600;
+    text-decoration: none;
+  }
+
+  .author:hover {
+    color: var(--color-accent);
   }
 
   .time {

@@ -44,7 +44,7 @@
     </div>
 
     {#if loading}
-      <p class="loading">loading...</p>
+      <p class="loading">Loading...</p>
     {:else if stories.length === 0}
       <p class="empty">Empty.</p>
     {:else}

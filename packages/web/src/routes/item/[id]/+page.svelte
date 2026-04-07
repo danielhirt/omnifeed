@@ -5,10 +5,14 @@
   import CommentTree from '../../../components/CommentTree.svelte'
   import SaveButton from '../../../components/SaveButton.svelte'
   import { setRefreshHandler } from '$lib/feed.svelte'
+  import { marked } from 'marked'
+  import { getSummary, saveSummary, clearSummary, isExpanded, setExpanded } from '$lib/summaries.svelte'
+  import { getSettings } from '$lib/settings.svelte'
 
   const client = new HnClient()
 
   let story: Story | null = $state(null)
+  let flagged = $state(false)
   let loading = $state(true)
   let focusStack: number[] = $state([])
   let focusedCommentIds: number[] = $state([])
@@ -31,11 +35,14 @@
 
   async function loadStory(id: number) {
     loading = true
+    flagged = false
     focusStack = []
     focusedCommentIds = []
     const item = await client.fetchItem(id)
     if (item && 'title' in item) {
       story = item as Story
+    } else if (item && ('dead' in item || !('title' in item))) {
+      flagged = true
     }
     loading = false
   }
@@ -53,10 +60,75 @@
   let displayedCommentIds = $derived(
     focusedCommentIds.length > 0 ? focusedCommentIds : (story?.kids ?? [])
   )
+
+  const appSettings = getSettings()
+
+  let summaryText = $state('')
+  let summaryExpanded = $state(false)
+  let summaryLoading = $state(false)
+  let summaryError = $state('')
+
+  let hasSummary = $derived(!!summaryText || summaryLoading || !!summaryError)
+
+  // Restore cached summary when story loads
+  $effect(() => {
+    if (story) {
+      const cached = getSummary(story.id)
+      if (cached) {
+        summaryText = cached
+        summaryExpanded = isExpanded(story.id)
+      } else {
+        summaryText = ''
+        summaryExpanded = false
+      }
+      summaryError = ''
+      summaryLoading = false
+    }
+  })
+
+  function toggleSummary() {
+    if (!story) return
+    if (!summaryText && !summaryLoading) {
+      fetchSummary()
+      return
+    }
+    summaryExpanded = !summaryExpanded
+    setExpanded(story.id, summaryExpanded)
+  }
+
+  async function fetchSummary() {
+    if (!story) return
+    summaryExpanded = true
+    summaryText = ''
+    summaryError = ''
+    summaryLoading = true
+
+    try {
+      const res = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storyId: story.id, model: appSettings.value.model }),
+      })
+
+      const text = await res.text()
+      if (!res.ok) {
+        summaryError = text
+      } else {
+        summaryText = text
+        saveSummary(story.id, text)
+        setExpanded(story.id, true)
+      }
+    } catch {
+      summaryError = 'Failed to generate summary.'
+    }
+    summaryLoading = false
+  }
 </script>
 
 {#if loading}
-  <p class="loading">loading...</p>
+  <p class="loading">Loading...</p>
+{:else if flagged}
+  <p class="flagged">This item has been flagged or removed.</p>
 {:else if story}
   <header class="story-header">
     <div class="story-text">
@@ -68,13 +140,14 @@
         {/if}
       </h1>
       <div class="story-meta">
-        {story.score} points | {story.by} | {timeAgo(story.time)} | {story.descendants ?? 0} comments
+        {story.score} points | <a href="/user/{story.by}" class="author">{story.by}</a> | {timeAgo(story.time)} | {story.descendants ?? 0} comments
         {#if domain}
           | {domain}
         {/if}
       </div>
     </div>
     <div class="header-actions">
+      <button class="ai-btn" onclick={toggleSummary} title="AI summary" disabled={summaryLoading}>✦</button>
       <SaveButton itemId={story.id} />
       {#if story.url}
         <a href={story.url} target="_blank" rel="noopener" class="open-link" title="Open link">↗</a>
@@ -82,10 +155,40 @@
     </div>
   </header>
 
+  {#if hasSummary}
+    <div class="summary-panel">
+      <button class="summary-header" onclick={() => { summaryExpanded = !summaryExpanded; if (story) setExpanded(story.id, summaryExpanded) }}>
+        <span class="summary-label">AI Summary {summaryExpanded ? '▾' : '▸'}</span>
+        <div class="summary-actions" onclick={(e) => e.stopPropagation()}>
+          {#if summaryText && !summaryLoading}
+            <button class="summary-regen" onclick={fetchSummary}>Regenerate</button>
+            <button class="summary-dismiss" onclick={() => { if (story) { clearSummary(story.id); summaryText = ''; summaryError = ''; summaryExpanded = false } }}>Dismiss</button>
+          {/if}
+        </div>
+      </button>
+      {#if summaryExpanded}
+        <div class="summary-body">
+          {#if summaryError}
+            <p class="summary-error">{summaryError}</p>
+          {:else if summaryText}
+            {@html marked(summaryText)}
+          {/if}
+          {#if summaryLoading}
+            <span class="summary-cursor">▍</span>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  {#if story.text}
+    <div class="story-body">{@html story.text}</div>
+  {/if}
+
   {#if focusStack.length > 0}
     <div class="focus-breadcrumb">
-      <button onclick={unfocus}>&larr; back</button>
-      <span class="focus-label">focused ({focusStack.length} deep)</span>
+      <button onclick={unfocus}>&larr; Back</button>
+      <span class="focus-label">Focused ({focusStack.length} deep)</span>
     </div>
   {/if}
 
@@ -144,12 +247,44 @@
     color: var(--color-text-muted);
   }
 
+  .story-meta .author {
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+
+  .story-meta .author:hover {
+    color: var(--color-accent);
+  }
+
+  .story-body {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--color-text);
+    overflow-wrap: break-word;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 12px;
+  }
+
+  .story-body :global(a) {
+    color: var(--color-link);
+    text-decoration: underline;
+  }
+
+  .story-body :global(a:hover) {
+    color: var(--color-accent);
+  }
+
+  .story-body :global(p) {
+    margin-bottom: 6px;
+  }
+
   .focus-breadcrumb {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
-    padding: 8px 0;
-    margin-bottom: 8px;
+    padding: 0 0 12px 0;
+    margin-bottom: 12px;
     border-bottom: 1px solid var(--color-border);
   }
 
@@ -165,6 +300,147 @@
   .focus-label {
     font-size: 0.75rem;
     color: var(--color-text-faint);
+  }
+
+  .ai-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    width: 28px;
+    height: 28px;
+    color: var(--color-text-faint);
+  }
+
+  .ai-btn:hover:not(:disabled) {
+    color: var(--color-accent);
+  }
+
+  .ai-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .summary-panel {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+
+  .summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    text-align: left;
+  }
+
+  .summary-label:hover {
+    color: var(--color-text);
+  }
+
+  .summary-panel:has(.summary-body) .summary-header {
+    margin-bottom: 8px;
+  }
+
+  .summary-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .summary-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .summary-regen {
+    font-size: 0.7rem;
+    color: var(--color-text-faint);
+    padding: 2px 6px;
+    border: 1px solid var(--color-border);
+  }
+
+  .summary-regen:hover {
+    color: var(--color-text);
+    border-color: var(--color-text-faint);
+  }
+
+  .summary-dismiss {
+    font-size: 0.7rem;
+    color: var(--color-text-faint);
+    padding: 2px 6px;
+    border: 1px solid var(--color-border);
+  }
+
+  .summary-dismiss:hover {
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+  }
+
+  .summary-body {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--color-text);
+  }
+
+  .summary-body :global(h2),
+  .summary-body :global(h3) {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-top: 10px;
+    margin-bottom: 4px;
+  }
+
+  .summary-body :global(p) {
+    margin-bottom: 6px;
+  }
+
+  .summary-body :global(ul),
+  .summary-body :global(ol) {
+    padding-left: 20px;
+    margin-bottom: 6px;
+  }
+
+  .summary-body :global(li) {
+    margin-bottom: 4px;
+  }
+
+  .summary-body :global(strong) {
+    font-weight: 600;
+  }
+
+  .summary-body :global(a) {
+    color: var(--color-link);
+    text-decoration: underline;
+  }
+
+  .summary-body :global(a:hover) {
+    color: var(--color-accent);
+  }
+
+  .summary-body :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--color-surface-hover);
+    padding: 1px 4px;
+  }
+
+  .summary-error {
+    color: var(--color-danger);
+  }
+
+  .summary-cursor {
+    color: var(--color-accent);
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
   }
 
   .header-actions {
@@ -187,6 +463,11 @@
 
   .open-link:hover {
     color: var(--color-accent);
+  }
+
+  .flagged {
+    color: var(--color-text-muted);
+    padding: 16px 0;
   }
 
   .no-comments {
