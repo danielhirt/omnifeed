@@ -1,6 +1,11 @@
 <script lang="ts">
   import { page } from '$app/state'
-  import { HnClient, type Story, type Comment as HnComment } from '@hackernews/core'
+  import {
+    HnClient, LobstersClient,
+    type Story, type FeedItem, type CommentItem, type ContentSource,
+    SOURCES,
+  } from '@hackernews/core'
+  import { fetchHnCommentTree } from '@hackernews/core'
   import { timeAgo, domainFrom } from '$lib/time'
   import CommentTree from '../../../components/CommentTree.svelte'
   import SaveButton from '../../../components/SaveButton.svelte'
@@ -9,58 +14,138 @@
   import { getSummary, saveSummary, clearSummary, isExpanded, setExpanded } from '$lib/summaries.svelte'
   import { getSettings } from '$lib/settings.svelte'
 
-  const client = new HnClient()
+  const hnClient = new HnClient()
+  const lobstersClient = new LobstersClient(undefined, '/api/lobsters?path=')
 
-  let story: Story | null = $state(null)
-  let flagged = $state(false)
+  let rawId = $derived(page.params.id ?? '')
+  let source = $derived<ContentSource>(
+    rawId.startsWith('lo:') ? 'lobsters' :
+    rawId.startsWith('dev:') ? 'devto' :
+    'hackernews'
+  )
+  let sourceId = $derived(
+    rawId.startsWith('lo:') ? rawId.slice(3) :
+    rawId.startsWith('hn:') ? rawId.slice(3) :
+    rawId.startsWith('dev:') ? rawId.slice(4) :
+    rawId
+  )
+  let itemId = $derived(
+    source === 'hackernews' ? `hn:${sourceId}` :
+    source === 'lobsters' ? `lo:${sourceId}` :
+    `dev:${sourceId}`
+  )
+
+  let title = $state('')
+  let url = $state<string | undefined>(undefined)
+  let bodyText = $state<string | undefined>(undefined)
+  let score = $state(0)
+  let author = $state('')
+  let timestamp = $state(0)
+  let commentCount = $state(0)
+  let sourceUrl = $state('')
+  let tags = $state<string[]>([])
+
+  let comments = $state<CommentItem[]>([])
   let loading = $state(true)
-  let focusStack: number[] = $state([])
-  let focusedCommentIds: number[] = $state([])
+  let flagged = $state(false)
   let refreshKey = $state(0)
 
-  let numericId = $derived(Number(page.params.id))
-  let itemId = $derived(story ? `hn:${story.id}` : '')
-  let domain = $derived(story ? domainFrom(story.url) : '')
+  let domain = $derived(domainFrom(url))
+  let sourceConfig = $derived(SOURCES.find(s => s.id === source))
+  let isHn = $derived(source === 'hackernews')
+
+  // Focus mode
+  let focusStack = $state<string[]>([])
+
+  function findComment(items: CommentItem[], targetId: string): CommentItem | null {
+    for (const c of items) {
+      if (c.id === targetId) return c
+      const found = findComment(c.children, targetId)
+      if (found) return found
+    }
+    return null
+  }
+
+  let displayedComments = $derived.by(() => {
+    if (focusStack.length === 0) return comments
+    const focusedId = focusStack[focusStack.length - 1]
+    const focused = findComment(comments, focusedId)
+    return focused ? [focused] : comments
+  })
 
   $effect(() => {
-    loadStory(numericId)
+    loadItem(source, sourceId)
   })
 
   $effect(() => {
     setRefreshHandler(() => {
-      loadStory(numericId)
+      loadItem(source, sourceId)
       refreshKey++
     })
     return () => setRefreshHandler(null)
   })
 
-  async function loadStory(id: number) {
+  async function loadItem(src: ContentSource, id: string) {
     loading = true
     flagged = false
     focusStack = []
-    focusedCommentIds = []
-    const item = await client.fetchItem(id)
-    if (item && 'title' in item) {
-      story = item as Story
-    } else if (item && ('dead' in item || !('title' in item))) {
+    comments = []
+
+    try {
+      if (src === 'hackernews') {
+        await loadHnItem(Number(id))
+      } else if (src === 'lobsters') {
+        await loadLobstersItem(id)
+      }
+    } catch {
       flagged = true
     }
     loading = false
   }
 
-  function focusComment(commentId: number) {
+  async function loadHnItem(id: number) {
+    const item = await hnClient.fetchItem(id)
+    if (!item || !('title' in item)) {
+      flagged = true
+      return
+    }
+    const story = item as Story
+    title = story.title
+    url = story.url
+    bodyText = story.text
+    score = story.score
+    author = story.by
+    timestamp = story.time
+    commentCount = story.descendants ?? 0
+    sourceUrl = `https://news.ycombinator.com/item?id=${id}`
+    tags = []
+
+    if (story.kids?.length) {
+      comments = await fetchHnCommentTree(hnClient, story.kids)
+    }
+  }
+
+  async function loadLobstersItem(shortId: string) {
+    const result = await lobstersClient.fetchStory(shortId)
+    title = result.story.title
+    url = result.story.url
+    bodyText = result.story.text
+    score = result.story.score
+    author = result.story.author
+    timestamp = result.story.timestamp
+    commentCount = result.story.commentCount
+    sourceUrl = result.story.sourceUrl
+    tags = result.story.tags ?? []
+    comments = result.comments
+  }
+
+  function focusComment(commentId: string) {
     focusStack = [...focusStack, commentId]
-    focusedCommentIds = [commentId]
   }
 
   function unfocus() {
     focusStack = focusStack.slice(0, -1)
-    focusedCommentIds = focusStack.length > 0 ? [focusStack[focusStack.length - 1]] : []
   }
-
-  let displayedCommentIds = $derived(
-    focusedCommentIds.length > 0 ? focusedCommentIds : (story?.kids ?? [])
-  )
 
   const appSettings = getSettings()
 
@@ -68,12 +153,10 @@
   let summaryExpanded = $state(false)
   let summaryLoading = $state(false)
   let summaryError = $state('')
-
   let hasSummary = $derived(!!summaryText || summaryLoading || !!summaryError)
 
-  // Restore cached summary when story loads
   $effect(() => {
-    if (story) {
+    if (title) {
       const cached = getSummary(itemId)
       if (cached) {
         summaryText = cached
@@ -104,12 +187,11 @@
   }
 
   async function copyPost() {
-    if (!story) return
     let content = ''
-    if (story.text) content += stripHtml(story.text)
-    if (story.url) {
+    if (bodyText) content += stripHtml(bodyText)
+    if (url) {
       if (content) content += '\n\n'
-      content += story.url
+      content += url
     }
     if (!content) return
     await navigator.clipboard.writeText(content)
@@ -118,7 +200,6 @@
   }
 
   function toggleSummary() {
-    if (!story) return
     if (!summaryText && !summaryLoading) {
       fetchSummary()
       return
@@ -128,17 +209,29 @@
   }
 
   async function fetchSummary() {
-    if (!story) return
     summaryExpanded = true
     summaryText = ''
     summaryError = ''
     summaryLoading = true
 
     try {
+      const body: Record<string, unknown> = { model: appSettings.value.model }
+      if (source === 'hackernews') {
+        body.storyId = Number(sourceId)
+      } else {
+        body.title = title
+        body.url = url
+        body.text = bodyText
+        body.comments = comments.slice(0, 30).map(c => ({
+          author: c.author,
+          text: stripHtml(c.text),
+        }))
+      }
+
       const res = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storyId: story.id, model: appSettings.value.model }),
+        body: JSON.stringify(body),
       })
 
       const text = await res.text()
@@ -160,41 +253,50 @@
   <p class="loading">Loading...</p>
 {:else if flagged}
   <p class="flagged">This item has been flagged or removed.</p>
-{:else if story}
+{:else}
   <header class="story-header">
     <div class="story-text">
       <h1 class="story-title">
-        {#if story.url}
-          <a href={story.url} target="_blank" rel="noopener">{story.title}</a>
+        {#if url}
+          <a href={url} target="_blank" rel="noopener">{title}</a>
         {:else}
-          {story.title}
+          {title}
         {/if}
       </h1>
       <div class="story-meta">
-        {story.score} points | <a href="/user/{story.by}" class="author">{story.by}</a> | {timeAgo(story.time)} | {story.descendants ?? 0} comments
+        {score} points |
+        {#if isHn}
+          <a href="/user/{author}" class="author">{author}</a>
+        {:else}
+          <span class="author">{author}</span>
+        {/if}
+        | {timeAgo(timestamp)} | {commentCount} comments
         {#if domain}
           | {domain}
+        {/if}
+        {#if tags.length > 0}
+          | <span class="tags">{tags.join(', ')}</span>
         {/if}
       </div>
     </div>
     <div class="header-actions">
       <button class="ai-btn" onclick={toggleSummary} title="AI summary" disabled={summaryLoading}>✦</button>
       <SaveButton {itemId} />
-      {#if story.url}
-        <a href={story.url} target="_blank" rel="noopener" class="open-link" title="Open link">↗</a>
+      {#if url}
+        <a href={url} target="_blank" rel="noopener" class="open-link" title="Open link">↗</a>
       {/if}
     </div>
   </header>
 
   {#if hasSummary}
     <div class="summary-panel">
-      <button class="summary-header" onclick={() => { summaryExpanded = !summaryExpanded; if (story) setExpanded(itemId, summaryExpanded) }}>
+      <button class="summary-header" onclick={() => { summaryExpanded = !summaryExpanded; setExpanded(itemId, summaryExpanded) }}>
         <span class="summary-label">AI Summary {summaryExpanded ? '▾' : '▸'}</span>
         <div class="summary-actions" onclick={(e) => e.stopPropagation()}>
           {#if summaryText && !summaryLoading}
             <button class="summary-copy" onclick={copySummary}>{summaryCopied ? 'Copied!' : 'Copy'}</button>
             <button class="summary-regen" onclick={fetchSummary}>Regenerate</button>
-            <button class="summary-dismiss" onclick={() => { if (story) { clearSummary(itemId); summaryText = ''; summaryError = ''; summaryExpanded = false } }}>Dismiss</button>
+            <button class="summary-dismiss" onclick={() => { clearSummary(itemId); summaryText = ''; summaryError = ''; summaryExpanded = false }}>Dismiss</button>
           {/if}
         </div>
       </button>
@@ -215,9 +317,9 @@
     </div>
   {/if}
 
-  {#if story.text}
+  {#if bodyText}
     <div class="story-body-wrapper">
-      <div class="story-body">{@html story.text}</div>
+      <div class="story-body">{@html bodyText}</div>
       <button class="post-copy-btn" onclick={copyPost} title="Copy post text and link">
         {postCopied ? '✓' : '⧉'}
       </button>
@@ -232,11 +334,10 @@
   {/if}
 
   <section class="comments-section">
-    {#if displayedCommentIds.length > 0}
+    {#if displayedComments.length > 0}
       {#key refreshKey}
         <CommentTree
-          commentIds={displayedCommentIds}
-          {client}
+          comments={displayedComments}
           focusPath={focusStack}
           onfocus={focusComment}
         />
@@ -579,5 +680,10 @@
   .no-comments {
     color: var(--color-text-faint);
     padding: 16px 0;
+  }
+
+  .tags {
+    color: var(--color-text-faint);
+    font-size: 0.75rem;
   }
 </style>
