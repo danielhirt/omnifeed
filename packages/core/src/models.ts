@@ -70,3 +70,75 @@ export const COLLECTION_COLORS = [
 ] as const
 
 export const DEFAULT_COLLECTION_ID = 'favorites'
+
+// --- Multi-source types ---
+
+export type ContentSource = 'hackernews' | 'lobsters' | 'devto'
+
+export interface FeedItem {
+  id: string               // Source-prefixed: "hn:123", "lo:abc", "dev:456"
+  source: ContentSource
+  title: string
+  url?: string
+  text?: string
+  score: number
+  author: string
+  timestamp: number        // Unix seconds
+  commentCount: number
+  sourceUrl: string        // URL to item on source site
+  tags?: string[]
+  originalId?: number | string  // Source-native ID for detail pages
+}
+
+export interface SourceFeed {
+  id: string
+  label: string
+  source: ContentSource
+}
+
+export interface SourceConfig {
+  id: ContentSource
+  name: string
+  shortName: string
+  color: string
+  feeds: SourceFeed[]
+}
+
+export const SOURCES: SourceConfig[] = [
+  {
+    id: 'hackernews',
+    name: 'Hacker News',
+    shortName: 'HN',
+    color: '#ff6600',
+    feeds: [
+      { id: 'top', label: 'Top', source: 'hackernews' },
+      { id: 'new', label: 'New', source: 'hackernews' },
+      { id: 'best', label: 'Best', source: 'hackernews' },
+      { id: 'ask', label: 'Ask', source: 'hackernews' },
+      { id: 'show', label: 'Show', source: 'hackernews' },
+      { id: 'job', label: 'Jobs', source: 'hackernews' },
+    ],
+  },
+  {
+    id: 'lobsters',
+    name: 'Lobsters',
+    shortName: 'Lobsters',
+    color: '#ac130d',
+    feeds: [
+      { id: 'hottest', label: 'Hottest', source: 'lobsters' },
+      { id: 'newest', label: 'Newest', source: 'lobsters' },
+      { id: 'active', label: 'Active', source: 'lobsters' },
+    ],
+  },
+  {
+    id: 'devto',
+    name: 'DEV Community',
+    shortName: 'DEV',
+    color: '#3b49df',
+    feeds: [
+      { id: 'top', label: 'Top', source: 'devto' },
+      { id: 'latest', label: 'Latest', source: 'devto' },
+      { id: 'rising', label: 'Rising', source: 'devto' },
+    ],
+  },
+]
