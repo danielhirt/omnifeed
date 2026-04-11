@@ -1,15 +1,6 @@
 import { goto } from '$app/navigation'
-import type { FeedType } from '@hackernews/core'
-import { refreshFeed } from '$lib/feed.svelte'
-
-const feedKeys: Record<string, FeedType> = {
-  '1': 'top',
-  '2': 'new',
-  '3': 'best',
-  '4': 'ask',
-  '5': 'show',
-  '6': 'job',
-}
+import { SOURCES } from '@hackernews/core'
+import { refreshFeed, getFeedState } from '$lib/feed.svelte'
 
 interface KeyboardState {
   selectedIndex: number
@@ -43,9 +34,13 @@ export function handleKeydown(e: KeyboardEvent) {
 
   const key = e.key
 
-  if (key in feedKeys) {
+  // Number keys switch feeds within current source
+  const feedIndex = Number(key) - 1
+  const feed = getFeedState()
+  const sourceConfig = SOURCES.find(s => s.id === feed.source) ?? SOURCES[0]
+  if (feedIndex >= 0 && feedIndex < sourceConfig.feeds.length) {
     e.preventDefault()
-    goto(`/?feed=${feedKeys[key]}`)
+    goto(`/?source=${feed.source}&feed=${sourceConfig.feeds[feedIndex].id}`)
     return
   }
 
@@ -64,7 +59,12 @@ export function handleKeydown(e: KeyboardEvent) {
       e.preventDefault()
       const card = document.querySelector(`[data-index="${state.selectedIndex}"]`) as HTMLAnchorElement
       if (card?.href) {
-        goto(card.getAttribute('href')!)
+        const href = card.getAttribute('href')!
+        if (href.startsWith('http')) {
+          window.open(href, '_blank', 'noopener')
+        } else {
+          goto(href)
+        }
       }
       break
     }
@@ -86,6 +86,10 @@ export function handleKeydown(e: KeyboardEvent) {
     case 'r':
       e.preventDefault()
       refreshFeed()
+      break
+    case '/':
+      e.preventDefault()
+      goto('/search')
       break
   }
 }
