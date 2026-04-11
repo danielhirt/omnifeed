@@ -104,6 +104,20 @@ export interface SourceConfig {
   feeds: SourceFeed[]
 }
 
+export interface CommentItem {
+  id: string
+  source: ContentSource
+  text: string
+  author: string
+  timestamp: number
+  score?: number
+  deleted?: boolean
+  dead?: boolean
+  children: CommentItem[]
+  depth: number
+  sourceUrl?: string
+}
+
 export const SOURCES: SourceConfig[] = [
   {
     id: 'hackernews',
