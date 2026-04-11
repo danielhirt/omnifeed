@@ -61,6 +61,15 @@
     summaryLoading = false
   }
 
+  let summaryCopied = $state(false)
+
+  async function copySummary() {
+    if (!summaryText) return
+    await navigator.clipboard.writeText(summaryText)
+    summaryCopied = true
+    setTimeout(() => summaryCopied = false, 1500)
+  }
+
   function dismissSummary() {
     clearSummary(story.id)
     summaryText = ''
@@ -177,6 +186,10 @@
                 {summaryExpanded ? 'Show less' : 'Show more'}
               </button>
               <span class="sep">|</span>
+              <button class="expand-toggle" onclick={copySummary}>
+                {summaryCopied ? 'Copied!' : 'Copy'}
+              </button>
+              <span class="sep">|</span>
               <button class="expand-toggle" onclick={fetchSummary}>Regenerate</button>
               <span class="sep">|</span>
               <button class="expand-toggle" onclick={dismissSummary}>Dismiss</button>
@@ -269,11 +282,16 @@
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
+    line-height: 1;
   }
 
   .text-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     font-size: 1rem;
-    padding: 4px 8px;
     color: var(--color-text-faint);
     opacity: 0.4;
     transition: opacity 0.15s, color 0.15s;
@@ -356,8 +374,12 @@
   }
 
   .ai-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     font-size: 1.1rem;
-    padding: 4px 8px;
     color: var(--color-text-faint);
     opacity: 0.4;
     transition: opacity 0.15s, color 0.15s;
@@ -464,8 +486,12 @@
   }
 
   .open-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
     font-size: 1.1rem;
-    padding: 4px 8px;
     color: var(--color-text-faint);
     text-decoration: none;
   }

@@ -454,10 +454,11 @@ describe('StoryCard AI summary', () => {
       })
       const section = container.querySelector('.summary-section')!
       const buttons = section.querySelectorAll('.expand-toggle')
-      expect(buttons).toHaveLength(3)
+      expect(buttons).toHaveLength(4)
       expect(buttons[0].textContent?.trim()).toBe('Show more')
-      expect(buttons[1].textContent?.trim()).toBe('Regenerate')
-      expect(buttons[2].textContent?.trim()).toBe('Dismiss')
+      expect(buttons[1].textContent?.trim()).toBe('Copy')
+      expect(buttons[2].textContent?.trim()).toBe('Regenerate')
+      expect(buttons[3].textContent?.trim()).toBe('Dismiss')
     })
 
     it('toggles summary expanded state on Show more click', async () => {
@@ -487,7 +488,7 @@ describe('StoryCard AI summary', () => {
       await vi.waitFor(() => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
-      const dismiss = container.querySelector('.summary-section')!.querySelectorAll('.expand-toggle')[2]
+      const dismiss = container.querySelector('.summary-section')!.querySelectorAll('.expand-toggle')[3]
       await fireEvent.click(dismiss)
       expect(container.querySelector('.summary-section')).toBeNull()
       expect(mockClearSummary).toHaveBeenCalledWith(7)
@@ -504,7 +505,7 @@ describe('StoryCard AI summary', () => {
       await vi.waitFor(() => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
-      const regen = container.querySelector('.summary-section')!.querySelectorAll('.expand-toggle')[1]
+      const regen = container.querySelector('.summary-section')!.querySelectorAll('.expand-toggle')[2]
       await fireEvent.click(regen)
       await vi.waitFor(() => {
         expect(fetch).toHaveBeenCalledTimes(2)

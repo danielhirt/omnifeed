@@ -86,6 +86,15 @@
     }
   })
 
+  let summaryCopied = $state(false)
+
+  async function copySummary() {
+    if (!summaryText) return
+    await navigator.clipboard.writeText(summaryText)
+    summaryCopied = true
+    setTimeout(() => summaryCopied = false, 1500)
+  }
+
   function toggleSummary() {
     if (!story) return
     if (!summaryText && !summaryLoading) {
@@ -161,6 +170,7 @@
         <span class="summary-label">AI Summary {summaryExpanded ? '▾' : '▸'}</span>
         <div class="summary-actions" onclick={(e) => e.stopPropagation()}>
           {#if summaryText && !summaryLoading}
+            <button class="summary-copy" onclick={copySummary}>{summaryCopied ? 'Copied!' : 'Copy'}</button>
             <button class="summary-regen" onclick={fetchSummary}>Regenerate</button>
             <button class="summary-dismiss" onclick={() => { if (story) { clearSummary(story.id); summaryText = ''; summaryError = ''; summaryExpanded = false } }}>Dismiss</button>
           {/if}
@@ -281,6 +291,39 @@
     margin-bottom: 6px;
   }
 
+  .story-body :global(pre + p),
+  .story-body :global(pre + *) {
+    margin-top: 10px;
+  }
+
+  .story-body :global(pre) {
+    background: var(--color-surface);
+    padding: 8px;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    border: 1px solid var(--color-border);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .story-body :global(pre::-webkit-scrollbar) {
+    height: 6px;
+  }
+
+  .story-body :global(pre::-webkit-scrollbar-track) {
+    background: transparent;
+  }
+
+  .story-body :global(pre::-webkit-scrollbar-thumb) {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+
+  .story-body :global(pre::-webkit-scrollbar-thumb:hover) {
+    background: var(--color-text-faint);
+  }
+
   .focus-breadcrumb {
     display: flex;
     align-items: baseline;
@@ -360,6 +403,7 @@
     gap: 8px;
   }
 
+  .summary-copy,
   .summary-regen {
     font-size: 0.7rem;
     color: var(--color-text-faint);
@@ -367,6 +411,7 @@
     border: 1px solid var(--color-border);
   }
 
+  .summary-copy:hover,
   .summary-regen:hover {
     color: var(--color-text);
     border-color: var(--color-text-faint);

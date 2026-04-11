@@ -17,6 +17,19 @@
 
   let collapsed = $state(false)
   let isFocused = $derived(focusPath.includes(comment.id))
+  let copied = $state(false)
+
+  function stripHtml(html: string): string {
+    const div = document.createElement('div')
+    div.innerHTML = html
+    return div.textContent ?? ''
+  }
+
+  async function copyComment() {
+    await navigator.clipboard.writeText(stripHtml(comment.text))
+    copied = true
+    setTimeout(() => copied = false, 1500)
+  }
 </script>
 
 {#if !comment.deleted && !comment.dead}
@@ -31,6 +44,9 @@
         </button>
         <a href="/user/{comment.by}" class="author">{comment.by}</a>
         <span class="time">{timeAgo(comment.time)}</span>
+        <button class="copy-btn" onclick={copyComment} title="Copy comment">
+          {copied ? '✓' : '⧉'}
+        </button>
         {#if onfocus && comment.kids?.length}
           <button class="focus-btn" onclick={() => onfocus(comment.id)} title="Focus thread">
             [f]
@@ -113,6 +129,11 @@
     color: var(--color-text-faint);
   }
 
+  .copy-btn:hover,
+  .focus-btn:hover {
+    color: var(--color-accent);
+  }
+
   .focus-btn {
     color: var(--color-text-faint);
     font-size: 0.85rem;
@@ -122,6 +143,15 @@
     opacity: 0;
   }
 
+  .copy-btn {
+    color: var(--color-text-faint);
+    font-size: 1.15rem;
+    padding: 0;
+    opacity: 0;
+    align-self: center;
+  }
+
+  .comment-header:hover .copy-btn,
   .comment-header:hover .focus-btn {
     opacity: 1;
   }
@@ -150,10 +180,34 @@
     font-family: var(--font-mono);
     font-size: 0.8rem;
     border: 1px solid var(--color-border);
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .comment-body :global(pre::-webkit-scrollbar) {
+    height: 6px;
+  }
+
+  .comment-body :global(pre::-webkit-scrollbar-track) {
+    background: transparent;
+  }
+
+  .comment-body :global(pre::-webkit-scrollbar-thumb) {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+
+  .comment-body :global(pre::-webkit-scrollbar-thumb:hover) {
+    background: var(--color-text-faint);
   }
 
   .comment-body :global(p) {
     margin-bottom: 6px;
+  }
+
+  .comment-body :global(pre + p),
+  .comment-body :global(pre + *) {
+    margin-top: 10px;
   }
 
   .collapsed-hint {
