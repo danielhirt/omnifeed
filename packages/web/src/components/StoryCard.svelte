@@ -12,8 +12,9 @@
 
   let domain = $derived(domainFrom(item.url))
   let read = $derived(isRead(item.id))
+  let hasDetailPage = $derived(item.source === 'hackernews' || item.source === 'lobsters')
+  let detailHref = $derived(hasDetailPage ? `/item/${item.id}` : item.sourceUrl)
   let isHn = $derived(item.source === 'hackernews')
-  let detailHref = $derived(isHn ? `/item/${item.originalId}` : item.sourceUrl)
   let textOpen = $state(false)
   let textExpanded = $state(false)
 
@@ -91,7 +92,7 @@
     data-index={index}
     onclick={(e: MouseEvent) => {
       markRead(item.id)
-      if (!isHn) {
+      if (!hasDetailPage) {
         e.preventDefault()
         window.open(detailHref, '_blank', 'noopener')
       }
