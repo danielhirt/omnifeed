@@ -3,71 +3,201 @@
   import { timeAgo, domainFrom } from '$lib/time'
   import SaveButton from './SaveButton.svelte'
   import { isRead, markRead } from '$lib/read-history.svelte'
+  import { getSummary, saveSummary, clearSummary, setExpanded } from '$lib/summaries.svelte'
+  import { getSettings } from '$lib/settings.svelte'
+  import { marked } from 'marked'
 
   let { story, index, selected = false }: { story: Story; index: number; selected?: boolean } = $props()
 
   let domain = $derived(domainFrom(story.url))
   let read = $derived(isRead(story.id))
+  let textOpen = $state(false)
+  let textExpanded = $state(false)
+
+  const appSettings = getSettings()
+
+  let summaryText = $state('')
+  let summaryLoading = $state(false)
+  let summaryError = $state('')
+  let summaryExpanded = $state(false)
+
+  let hasSummary = $derived(!!summaryText || summaryLoading || !!summaryError)
+
+  $effect(() => {
+    const cached = getSummary(story.id)
+    if (cached) summaryText = cached
+  })
+
+  function triggerSummary(e: MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    textOpen = true
+    if (summaryText && !summaryLoading) return
+    fetchSummary()
+  }
+
+  async function fetchSummary() {
+    summaryText = ''
+    summaryError = ''
+    summaryLoading = true
+
+    try {
+      const res = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storyId: story.id, model: appSettings.value.model }),
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        summaryError = text
+      } else {
+        summaryText = text
+        saveSummary(story.id, text)
+        setExpanded(story.id, true)
+      }
+    } catch {
+      summaryError = 'Failed to generate summary.'
+    }
+    summaryLoading = false
+  }
+
+  function dismissSummary() {
+    clearSummary(story.id)
+    summaryText = ''
+    summaryError = ''
+    summaryExpanded = false
+    summaryLoading = false
+  }
 </script>
 
-<a
-  href="/item/{story.id}"
-  class="story-card"
-  class:selected
-  class:read
-  data-index={index}
-  onclick={() => markRead(story.id)}
->
-  <div class="story-main">
-    <div class="title-row">
-      <span class="rank">{index + 1}.</span>
-      <span class="title">
-        {story.title}
-        {#if story.url}
-          <a
-            class="domain"
-            href={story.url}
-            target="_blank"
-            rel="noopener"
-            onclick={(e: MouseEvent) => e.stopPropagation()}
-          >({domain})</a>
-        {/if}
-      </span>
-    </div>
-    <div class="meta">
-      <span class="score">{story.score}</span>
-      <span class="sep">|</span>
-      <button class="author" onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/user/${story.by}` }}>{story.by}</button>
-      <span class="sep">|</span>
-      <span>{timeAgo(story.time)}</span>
-      {#if story.descendants > 0}
+<div class="story-wrapper">
+  <a
+    href="/item/{story.id}"
+    class="story-card"
+    class:selected
+    class:read
+    data-index={index}
+    onclick={() => markRead(story.id)}
+  >
+    <div class="story-main">
+      <div class="title-row">
+        <span class="rank">{index + 1}.</span>
+        <span class="title">
+          {story.title}
+          {#if story.url}
+            <a
+              class="domain"
+              href={story.url}
+              target="_blank"
+              rel="noopener"
+              onclick={(e: MouseEvent) => e.stopPropagation()}
+            >({domain})</a>
+          {/if}
+        </span>
+      </div>
+      <div class="meta">
+        <span class="score">{story.score}</span>
         <span class="sep">|</span>
-        <span>{story.descendants}&nbsp;comments</span>
+        <button class="author" onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); window.location.href = `/user/${story.by}` }}>{story.by}</button>
+        <span class="sep">|</span>
+        <span>{timeAgo(story.time)}</span>
+        {#if story.descendants > 0}
+          <span class="sep">|</span>
+          <span>{story.descendants}&nbsp;comments</span>
+        {/if}
+      </div>
+    </div>
+    <div class="card-actions">
+      <button
+        class="text-toggle"
+        class:has-text={!!story.text}
+        class:active={textOpen}
+        title={story.text ? 'Show post text' : 'No post content'}
+        onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); textOpen = !textOpen; if (!textOpen) textExpanded = false }}
+      >{textOpen ? '▾' : '▸'}</button>
+      <button
+        class="ai-toggle"
+        class:active={hasSummary}
+        title="AI summary"
+        disabled={summaryLoading}
+        onclick={triggerSummary}
+      >✦</button>
+      <SaveButton itemId={story.id} />
+      {#if story.url}
+        <a
+          href={story.url}
+          target="_blank"
+          rel="noopener"
+          class="open-link"
+          title="Open link"
+          onclick={(e: MouseEvent) => e.stopPropagation()}
+        >↗</a>
       {/if}
     </div>
-  </div>
-  <div class="card-actions">
-    <SaveButton itemId={story.id} />
-    {#if story.url}
-      <a
-        href={story.url}
-        target="_blank"
-        rel="noopener"
-        class="open-link"
-        title="Open link"
-        onclick={(e: MouseEvent) => e.stopPropagation()}
-      >↗</a>
-    {/if}
-  </div>
-</a>
+  </a>
+
+  {#if textOpen}
+    <div class="text-panel">
+      {#if story.text}
+        <span class="section-label">OP Comment</span>
+        <div class="text-content" class:expanded={textExpanded}>
+          {@html story.text}
+        </div>
+        <div class="panel-actions">
+          <button class="expand-toggle" onclick={() => textExpanded = !textExpanded}>
+            {textExpanded ? 'Show less' : 'Show more'}
+          </button>
+          <span class="sep">|</span>
+          <button class="expand-toggle" onclick={() => { textOpen = false; textExpanded = false }}>
+            Collapse
+          </button>
+        </div>
+      {:else if !hasSummary}
+        <div class="no-content">No post content.</div>
+      {/if}
+
+      {#if hasSummary}
+        <div class="summary-section" class:has-divider={!!story.text}>
+          <div class="summary-header">
+            <span class="summary-label">AI Summary</span>
+            {#if summaryLoading}
+              <span class="summary-spinner">✦</span>
+            {/if}
+          </div>
+          {#if summaryError}
+            <p class="summary-error">{summaryError}</p>
+          {:else if summaryText}
+            <div class="summary-content" class:expanded={summaryExpanded}>
+              {@html marked(summaryText)}
+            </div>
+          {/if}
+          {#if summaryText && !summaryLoading}
+            <div class="panel-actions">
+              <button class="expand-toggle" onclick={() => summaryExpanded = !summaryExpanded}>
+                {summaryExpanded ? 'Show less' : 'Show more'}
+              </button>
+              <span class="sep">|</span>
+              <button class="expand-toggle" onclick={fetchSummary}>Regenerate</button>
+              <span class="sep">|</span>
+              <button class="expand-toggle" onclick={dismissSummary}>Dismiss</button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+</div>
 
 <style>
+  .story-wrapper {
+    border-bottom: 1px solid var(--color-border);
+  }
+
   .story-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 8px 0;
-    border-bottom: 1px solid var(--color-border);
     text-decoration: none;
     color: inherit;
   }
@@ -139,6 +269,198 @@
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
+  }
+
+  .text-toggle {
+    font-size: 1rem;
+    padding: 4px 8px;
+    color: var(--color-text-faint);
+    opacity: 0.4;
+    transition: opacity 0.15s, color 0.15s;
+  }
+
+  .text-toggle.has-text {
+    opacity: 0.7;
+  }
+
+  .text-toggle:hover,
+  .text-toggle.active {
+    color: var(--color-accent);
+    opacity: 1;
+  }
+
+  .text-panel {
+    padding: 6px 0 10px calc(2.5ch + 6px);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+  }
+
+  .text-content {
+    max-height: 4.5em;
+    overflow: hidden;
+  }
+
+  .text-content.expanded {
+    max-height: 300px;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .text-content.expanded::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .text-content.expanded::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .text-content.expanded::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+
+  .text-content.expanded::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-faint);
+  }
+
+  .text-content :global(a) {
+    color: var(--color-accent);
+  }
+
+  .text-content :global(p) {
+    margin-bottom: 0.5em;
+  }
+
+  .panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .panel-actions .sep {
+    color: var(--color-text-faint);
+    font-size: 0.75rem;
+  }
+
+  .expand-toggle {
+    font-size: 0.75rem;
+    color: var(--color-text-faint);
+  }
+
+  .expand-toggle:hover {
+    color: var(--color-accent);
+  }
+
+  .ai-toggle {
+    font-size: 1.1rem;
+    padding: 4px 8px;
+    color: var(--color-text-faint);
+    opacity: 0.4;
+    transition: opacity 0.15s, color 0.15s;
+  }
+
+  .ai-toggle:hover,
+  .ai-toggle.active {
+    color: var(--color-accent);
+    opacity: 1;
+  }
+
+  .ai-toggle:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .section-label,
+  .summary-label {
+    font-size: 0.75rem;
+    color: var(--color-text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .summary-section {
+    margin-top: 8px;
+  }
+
+  .summary-section.has-divider {
+    padding-top: 8px;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .summary-content {
+    max-height: 9em;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+
+  .summary-content.expanded {
+    max-height: 300px;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .summary-content.expanded::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .summary-content.expanded::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .summary-content.expanded::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+
+  .summary-content.expanded::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-faint);
+  }
+
+  .summary-content :global(a) {
+    color: var(--color-accent);
+  }
+
+  .summary-content :global(p) {
+    margin-bottom: 0.5em;
+  }
+
+  .summary-content :global(li) {
+    margin-left: 1.2em;
+  }
+
+  .summary-error {
+    color: var(--color-danger);
+    font-size: 0.85rem;
+    margin-top: 4px;
+  }
+
+  .summary-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .summary-spinner {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: var(--color-accent);
+    animation: spin 1.5s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .no-content {
+    font-style: italic;
+    color: var(--color-text-faint);
   }
 
   .open-link {

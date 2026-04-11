@@ -166,15 +166,17 @@
           {/if}
         </div>
       </button>
+      {#if summaryLoading}
+        <div class="summary-loading">
+          <span class="summary-spinner">✦</span>
+        </div>
+      {/if}
       {#if summaryExpanded}
         <div class="summary-body">
           {#if summaryError}
             <p class="summary-error">{summaryError}</p>
           {:else if summaryText}
             {@html marked(summaryText)}
-          {/if}
-          {#if summaryLoading}
-            <span class="summary-cursor">▍</span>
           {/if}
         </div>
       {/if}
@@ -306,7 +308,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.9rem;
+    font-size: 1.1rem;
     width: 28px;
     height: 28px;
     color: var(--color-text-faint);
@@ -434,13 +436,22 @@
     color: var(--color-danger);
   }
 
-  .summary-cursor {
-    color: var(--color-accent);
-    animation: blink 1s step-end infinite;
+  .summary-loading {
+    display: flex;
+    justify-content: center;
+    padding: 20px 0;
   }
 
-  @keyframes blink {
-    50% { opacity: 0; }
+  .summary-spinner {
+    display: inline-block;
+    font-size: 1.4rem;
+    color: var(--color-accent);
+    animation: spin 1.5s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 
   .header-actions {

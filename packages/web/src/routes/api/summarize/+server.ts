@@ -89,13 +89,34 @@ const MODEL_MAP: Record<string, string> = {
   opus: 'claude-opus-4-6',
 }
 
+const CLAUDE_TIMEOUT_MS = 90_000
+const SUMMARIZER_SYSTEM_PROMPT =
+  'You are a concise content summarizer for Hacker News. Output only the summary in markdown format, nothing else. No preamble, no sign-off.'
+
 function runClaude(prompt: string, model = 'sonnet'): Promise<string> {
   const modelId = MODEL_MAP[model] ?? MODEL_MAP.sonnet
   return new Promise((resolve, reject) => {
-    const proc = spawn('claude', ['-p', '--output-format', 'text', '--model', modelId], {
+    let settled = false
+    const proc = spawn('claude', [
+      '-p',
+      '--output-format', 'stream-json',
+      '--verbose',
+      '--model', modelId,
+      '--tools', '',
+      '--system-prompt', SUMMARIZER_SYSTEM_PROMPT,
+    ], {
       stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: '/tmp',
       env: { ...process.env, PATH: process.env.PATH + ':/usr/local/bin:/opt/homebrew/bin:' + (process.env.HOME ?? '') + '/.local/bin' },
     })
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        proc.kill()
+        reject(new Error('Summary generation timed out'))
+      }
+    }, CLAUDE_TIMEOUT_MS)
 
     let stdout = ''
     let stderr = ''
@@ -103,34 +124,85 @@ function runClaude(prompt: string, model = 'sonnet'): Promise<string> {
     proc.stdout.on('data', (data: Buffer) => { stdout += data.toString() })
     proc.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
 
-    proc.on('close', (code) => {
-      if (code === 0) {
-        resolve(stdout)
-      } else {
-        reject(new Error(stderr || `claude exited with code ${code}`))
+    proc.on('close', () => {
+      clearTimeout(timer)
+      if (settled) return
+      settled = true
+
+      // Parse stream-json lines to extract the first assistant text response,
+      // ignoring any subsequent turns injected by hooks.
+      for (const line of stdout.split('\n')) {
+        if (!line.trim()) continue
+        try {
+          const event = JSON.parse(line)
+          if (event.type !== 'assistant') continue
+          const blocks = event.message?.content
+          if (!Array.isArray(blocks)) continue
+          for (const block of blocks) {
+            if (block.type === 'text' && block.text) {
+              resolve(block.text.trim())
+              return
+            }
+          }
+        } catch {
+          // skip malformed lines
+        }
       }
+
+      reject(new Error(stderr.trim() || 'No summary text in response'))
     })
 
-    proc.on('error', reject)
+    proc.on('error', (err) => {
+      clearTimeout(timer)
+      if (!settled) {
+        settled = true
+        reject(err)
+      }
+    })
 
     proc.stdin.write(prompt)
     proc.stdin.end()
   })
 }
 
+async function runClaudeWithRetry(prompt: string, model = 'sonnet', retries = 1): Promise<string> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await runClaude(prompt, model)
+    } catch (err) {
+      if (attempt === retries) throw err
+      // Brief pause before retry
+      await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
+  throw new Error('Unreachable')
+}
+
 export const POST: RequestHandler = async ({ request, fetch: skFetch }) => {
-  const { storyId, model } = await request.json()
+  let body: { storyId?: number; model?: string }
+  try {
+    body = await request.json()
+  } catch {
+    return new Response('Invalid request body', { status: 400 })
+  }
+
+  const { storyId, model } = body
   if (!storyId) {
     return new Response('Missing storyId', { status: 400 })
   }
 
   const client = new HnClient(skFetch)
 
-  const item = await client.fetchItem(storyId)
-  if (!item || !('title' in item)) {
-    return new Response('Story not found', { status: 404 })
+  let story: Story
+  try {
+    const item = await client.fetchItem(storyId)
+    if (!item || !('title' in item)) {
+      return new Response('Story not found', { status: 404 })
+    }
+    story = item as Story
+  } catch {
+    return new Response('Failed to fetch story from HN', { status: 502 })
   }
-  const story = item as Story
 
   const [articleText, comments] = await Promise.all([
     story.url ? fetchArticleText(story.url, skFetch) : Promise.resolve(''),
@@ -140,7 +212,7 @@ export const POST: RequestHandler = async ({ request, fetch: skFetch }) => {
   const prompt = buildPrompt(story, articleText, comments)
 
   try {
-    const result = await runClaude(prompt, model)
+    const result = await runClaudeWithRetry(prompt, model)
     return new Response(result, {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     })

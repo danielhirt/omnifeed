@@ -15,18 +15,21 @@
 	},
 	"dependencies": {
 		"@hackernews/core": "workspace:*",
-		"idb": "^8.0.0",
+		"idb": "8.0.3",
 		"marked": "17.0.6"
 	},
 	"devDependencies": {
-		"@sveltejs/adapter-auto": "^7.0.0",
-		"@sveltejs/kit": "^2.50.2",
-		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"@sveltejs/adapter-auto": "7.0.1",
+		"@sveltejs/kit": "2.56.1",
+		"@sveltejs/vite-plugin-svelte": "6.2.4",
+		"@testing-library/jest-dom": "6.9.1",
+		"@testing-library/svelte": "5.3.1",
 		"fake-indexeddb": "6.2.5",
-		"svelte": "^5.54.0",
-		"svelte-check": "^4.4.2",
-		"typescript": "^5.9.3",
-		"vite": "^7.3.1",
-		"vitest": "^3.2.4"
+		"jsdom": "29.0.2",
+		"svelte": "5.55.1",
+		"svelte-check": "4.4.6",
+		"typescript": "5.9.3",
+		"vite": "7.3.1",
+		"vitest": "3.2.4"
 	}
 }
