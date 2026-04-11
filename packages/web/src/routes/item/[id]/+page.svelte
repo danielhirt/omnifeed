@@ -87,12 +87,33 @@
   })
 
   let summaryCopied = $state(false)
+  let postCopied = $state(false)
 
   async function copySummary() {
     if (!summaryText) return
     await navigator.clipboard.writeText(summaryText)
     summaryCopied = true
     setTimeout(() => summaryCopied = false, 1500)
+  }
+
+  function stripHtml(html: string): string {
+    const div = document.createElement('div')
+    div.innerHTML = html
+    return div.textContent ?? ''
+  }
+
+  async function copyPost() {
+    if (!story) return
+    let content = ''
+    if (story.text) content += stripHtml(story.text)
+    if (story.url) {
+      if (content) content += '\n\n'
+      content += story.url
+    }
+    if (!content) return
+    await navigator.clipboard.writeText(content)
+    postCopied = true
+    setTimeout(() => postCopied = false, 1500)
   }
 
   function toggleSummary() {
@@ -194,7 +215,12 @@
   {/if}
 
   {#if story.text}
-    <div class="story-body">{@html story.text}</div>
+    <div class="story-body-wrapper">
+      <div class="story-body">{@html story.text}</div>
+      <button class="post-copy-btn" onclick={copyPost} title="Copy post text and link">
+        {postCopied ? '✓' : '⧉'}
+      </button>
+    </div>
   {/if}
 
   {#if focusStack.length > 0}
@@ -268,14 +294,37 @@
     color: var(--color-accent);
   }
 
+  .story-body-wrapper {
+    position: relative;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 12px;
+  }
+
+  .post-copy-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 1.15rem;
+    color: var(--color-text-faint);
+    opacity: 0;
+    transition: opacity 0.15s;
+    padding: 2px;
+  }
+
+  .story-body-wrapper:hover .post-copy-btn {
+    opacity: 1;
+  }
+
+  .post-copy-btn:hover {
+    color: var(--color-accent);
+  }
+
   .story-body {
     font-size: 0.95rem;
     line-height: 1.5;
     color: var(--color-text);
     overflow-wrap: break-word;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--color-border);
-    margin-bottom: 12px;
   }
 
   .story-body :global(a) {

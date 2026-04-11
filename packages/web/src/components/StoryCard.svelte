@@ -291,7 +291,7 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    font-size: 1rem;
+    font-size: 1.1rem;
     color: var(--color-text-faint);
     opacity: 0.4;
     transition: opacity 0.15s, color 0.15s;
@@ -308,10 +308,11 @@
   }
 
   .text-panel {
-    padding: 6px 0 10px calc(2.5ch + 6px);
+    padding: 8px 12px 10px calc(2.5ch + 12px);
     font-size: 0.9rem;
     line-height: 1.5;
     color: var(--color-text-muted);
+    background: var(--color-surface-hover);
   }
 
   .text-content {
@@ -345,6 +346,11 @@
   }
 
   .text-content :global(a) {
+    color: var(--color-link);
+    text-decoration: underline;
+  }
+
+  .text-content :global(a:hover) {
     color: var(--color-accent);
   }
 
