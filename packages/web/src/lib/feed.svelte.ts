@@ -2,10 +2,12 @@ import {
   createSourceClient,
   LobstersClient,
   SOURCE_ID,
+  SOURCES,
   type SourceClient,
   type ContentSource,
   type FeedItem,
   type OmnifeedMode,
+  type OmnifeedSort,
   type FeedView,
   OMNIFEED_MAP,
   mergeFeeds,
@@ -19,12 +21,13 @@ interface FeedCache {
 
 const clients = new Map<ContentSource, SourceClient>()
 const cache = new Map<string, FeedCache>()
+const allSourceIds = SOURCES.map(s => s.id)
 
 function getClient(source: ContentSource): SourceClient {
   let client = clients.get(source)
   if (!client) {
     if (source === SOURCE_ID.LOBSTERS) {
-      // Proxy through SvelteKit API route — Lobsters has no CORS headers
+      // Lobsters has no CORS headers
       client = new LobstersClient(undefined, '/api/lobsters?path=')
     } else {
       client = createSourceClient(source)
@@ -32,6 +35,21 @@ function getClient(source: ContentSource): SourceClient {
     clients.set(source, client)
   }
   return client
+}
+
+async function fetchAllSources(mode: OmnifeedMode, page: number): Promise<FeedItem[][]> {
+  const feedMap = OMNIFEED_MAP[mode]
+  return Promise.all(
+    allSourceIds.map(async (sourceId) => {
+      try {
+        const client = getClient(sourceId)
+        return await client.fetchFeed(feedMap[sourceId], page)
+      } catch (err) {
+        if (page === 0) console.error(`Failed to fetch ${sourceId}:`, err)
+        return [] as FeedItem[]
+      }
+    })
+  )
 }
 
 let requestId = 0
@@ -97,14 +115,18 @@ export async function loadFeed(source: ContentSource, feedId: string, tag?: stri
   loading = false
 }
 
+function sortForMode(mode: OmnifeedMode): OmnifeedSort {
+  return mode === 'hottest' ? 'score' : 'newest'
+}
+
 export async function loadOmnifeed(mode: OmnifeedMode) {
   const key = `omnifeed:${mode}`
   omnifeedMode = mode
   currentView = 'omnifeed'
 
-  // Check cache
   const cached = cache.get(key)
-  if (cached && currentKey === key) {
+  if (cached) {
+    currentKey = key
     items = cached.items
     return
   }
@@ -115,27 +137,12 @@ export async function loadOmnifeed(mode: OmnifeedMode) {
   const myRequestId = ++requestId
 
   try {
-    const sourceIds: ContentSource[] = ['hackernews', 'lobsters', 'devto']
-    const feedMap = OMNIFEED_MAP[mode]
-
-    const results = await Promise.all(
-      sourceIds.map(async (sourceId) => {
-        try {
-          const client = getClient(sourceId)
-          return await client.fetchFeed(feedMap[sourceId], 0)
-        } catch (err) {
-          console.error(`Failed to fetch ${sourceId}:`, err)
-          return [] as FeedItem[]
-        }
-      })
-    )
-
+    const results = await fetchAllSources(mode, 0)
     if (myRequestId !== requestId) return
 
     const feedsBySource: Partial<Record<ContentSource, FeedItem[]>> = {}
-    sourceIds.forEach((id, i) => { feedsBySource[id] = results[i] })
-    const sortBy = mode === 'hottest' ? 'score' as const : 'newest' as const
-    const merged = mergeFeeds(feedsBySource, sortBy)
+    allSourceIds.forEach((id, i) => { feedsBySource[id] = results[i] })
+    const merged = mergeFeeds(feedsBySource, sortForMode(mode))
 
     items = merged
     cache.set(key, { items: merged, currentPage: 0, exhausted: false })
@@ -196,20 +203,7 @@ export async function loadMore() {
   loadingMore = true
 
   if (currentView === 'omnifeed') {
-    const sourceIds: ContentSource[] = ['hackernews', 'lobsters', 'devto']
-    const feedMap = OMNIFEED_MAP[omnifeedMode]
-
-    const results = await Promise.all(
-      sourceIds.map(async (sourceId) => {
-        try {
-          const client = getClient(sourceId)
-          return await client.fetchFeed(feedMap[sourceId], entry.currentPage + 1)
-        } catch {
-          return [] as FeedItem[]
-        }
-      })
-    )
-
+    const results = await fetchAllSources(omnifeedMode, entry.currentPage + 1)
     const newItems = results.flat()
 
     if (newItems.length === 0) {
@@ -217,12 +211,10 @@ export async function loadMore() {
     } else {
       entry.currentPage++
       if (omnifeedMode === 'hottest') {
-        // Score-sorted: new page items may outscore existing ones, merge-insert
-        const merged = [...entry.items, ...newItems]
-        merged.sort((a, b) => b.score - a.score)
-        entry.items = merged
+        // New page items may outscore existing ones across sources
+        entry.items.push(...newItems)
+        entry.items.sort((a, b) => b.score - a.score)
       } else {
-        // Chronological: new pages are older, append directly
         entry.items = [...entry.items, ...newItems]
       }
       items = entry.items
@@ -254,7 +246,6 @@ export async function loadMore() {
   } catch (err) {
     if (thisRequest !== requestId) return
     console.error('Failed to load more:', err)
-    // Back off to prevent retry storms on rate limits
     loadMoreCooldown = true
     setTimeout(() => { loadMoreCooldown = false }, 5000)
   } finally {

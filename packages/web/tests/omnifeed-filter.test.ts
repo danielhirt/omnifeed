@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { FeedItem, ContentSource } from '@omnifeed/core'
+import type { SourceFilter } from '../src/components/FeedControls.svelte'
 
 function makeFeedItem(source: ContentSource, timestamp: number): FeedItem {
   return {
@@ -13,8 +14,6 @@ function makeFeedItem(source: ContentSource, timestamp: number): FeedItem {
     sourceUrl: 'https://example.com',
   }
 }
-
-type SourceFilter = 'all' | 'hackernews' | 'lobsters' | 'devto'
 
 function filterBySource(items: FeedItem[], filter: SourceFilter): FeedItem[] {
   if (filter === 'all') return items

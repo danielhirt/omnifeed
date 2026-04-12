@@ -28,33 +28,33 @@
   {#if children}{@render children()}{/if}
   {#if isOmnifeed}
     <button
-      class="mode-btn"
+      class="filter-btn"
       class:active={omnifeedMode === 'newest'}
       onclick={() => omnifeedMode = 'newest'}
     >Newest</button>
     <button
-      class="mode-btn"
+      class="filter-btn"
       class:active={omnifeedMode === 'hottest'}
       onclick={() => omnifeedMode = 'hottest'}
     >Hottest</button>
     <span class="filter-sep">|</span>
     <button
-      class="source-btn"
+      class="filter-btn"
       class:active={sourceFilter === 'all'}
       onclick={() => sourceFilter = 'all'}
     >All</button>
     <button
-      class="source-btn compact"
+      class="filter-btn compact"
       class:active={sourceFilter === 'hackernews'}
       onclick={() => sourceFilter = 'hackernews'}
     >HN</button>
     <button
-      class="source-btn compact"
+      class="filter-btn compact"
       class:active={sourceFilter === 'lobsters'}
       onclick={() => sourceFilter = 'lobsters'}
     >Lobsters</button>
     <button
-      class="source-btn compact"
+      class="filter-btn compact"
       class:active={sourceFilter === 'devto'}
       onclick={() => sourceFilter = 'devto'}
     >DEV</button>
@@ -123,39 +123,4 @@
     color: var(--color-accent);
   }
 
-  .mode-btn {
-    font-size: 0.75rem;
-    color: var(--color-text-faint);
-    padding: 2px 5px;
-    border: 1px solid transparent;
-  }
-
-  .mode-btn:hover {
-    color: var(--color-text);
-  }
-
-  .mode-btn.active {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
-  }
-
-  .source-btn {
-    font-size: 0.75rem;
-    color: var(--color-text-faint);
-    padding: 2px 5px;
-    border: 1px solid transparent;
-  }
-
-  .source-btn:hover {
-    color: var(--color-text);
-  }
-
-  .source-btn.compact {
-    padding: 2px 3px;
-  }
-
-  .source-btn.active {
-    color: var(--color-accent);
-    border-color: var(--color-accent);
-  }
 </style>
