@@ -271,6 +271,100 @@ describe('sortCommentTree', () => {
   it('handles empty array', () => {
     expect(sortCommentTree([], 'newest')).toEqual([])
   })
+
+  describe('focus mode simulation (single-root subtree)', () => {
+    it('sorts children of a focused comment by newest', () => {
+      const focused = [
+        makeCommentItem({
+          id: 'root',
+          timestamp: 100,
+          children: [
+            makeCommentItem({ id: 'child-a', timestamp: 200, depth: 1 }),
+            makeCommentItem({ id: 'child-b', timestamp: 400, depth: 1 }),
+            makeCommentItem({ id: 'child-c', timestamp: 300, depth: 1 }),
+          ],
+        }),
+      ]
+      const result = sortCommentTree(focused, 'newest')
+      expect(result[0].children.map((c) => c.id)).toEqual(['child-b', 'child-c', 'child-a'])
+    })
+
+    it('sorts children of a focused comment by oldest', () => {
+      const focused = [
+        makeCommentItem({
+          id: 'root',
+          timestamp: 100,
+          children: [
+            makeCommentItem({ id: 'child-b', timestamp: 400, depth: 1 }),
+            makeCommentItem({ id: 'child-a', timestamp: 200, depth: 1 }),
+          ],
+        }),
+      ]
+      const result = sortCommentTree(focused, 'oldest')
+      expect(result[0].children.map((c) => c.id)).toEqual(['child-a', 'child-b'])
+    })
+
+    it('preserves children order in default mode', () => {
+      const focused = [
+        makeCommentItem({
+          id: 'root',
+          timestamp: 100,
+          children: [
+            makeCommentItem({ id: 'child-b', timestamp: 400, depth: 1 }),
+            makeCommentItem({ id: 'child-a', timestamp: 200, depth: 1 }),
+          ],
+        }),
+      ]
+      const result = sortCommentTree(focused, 'default')
+      expect(result[0].children.map((c) => c.id)).toEqual(['child-b', 'child-a'])
+    })
+
+    it('sorts deeply nested children in focused subtree', () => {
+      const focused = [
+        makeCommentItem({
+          id: 'root',
+          timestamp: 100,
+          children: [
+            makeCommentItem({
+              id: 'child',
+              timestamp: 200,
+              depth: 1,
+              children: [
+                makeCommentItem({ id: 'gc-old', timestamp: 300, depth: 2 }),
+                makeCommentItem({ id: 'gc-new', timestamp: 500, depth: 2 }),
+                makeCommentItem({ id: 'gc-mid', timestamp: 400, depth: 2 }),
+              ],
+            }),
+          ],
+        }),
+      ]
+      const result = sortCommentTree(focused, 'newest')
+      expect(result[0].children[0].children.map((c) => c.id)).toEqual(['gc-new', 'gc-mid', 'gc-old'])
+    })
+
+    it('does not mutate the focused subtree', () => {
+      const focused = [
+        makeCommentItem({
+          id: 'root',
+          timestamp: 100,
+          children: [
+            makeCommentItem({ id: 'c1', timestamp: 300, depth: 1 }),
+            makeCommentItem({ id: 'c2', timestamp: 100, depth: 1 }),
+          ],
+        }),
+      ]
+      const originalOrder = focused[0].children.map((c) => c.id)
+      sortCommentTree(focused, 'newest')
+      expect(focused[0].children.map((c) => c.id)).toEqual(originalOrder)
+    })
+
+    it('handles focused comment with no children', () => {
+      const focused = [makeCommentItem({ id: 'leaf', timestamp: 100 })]
+      const result = sortCommentTree(focused, 'newest')
+      expect(result).toHaveLength(1)
+      expect(result[0].children).toEqual([])
+    })
+  })
 })
 
 describe('collection item sorting and filtering', () => {

@@ -52,9 +52,26 @@
     return sorted
   })
 
+  let loadedIds: string[] = $state([])
+
   $effect(() => {
     if (collection) {
-      loadItems(collection.itemIds)
+      const ids = collection.itemIds
+      const idsKey = ids.join(',')
+      const loadedKey = loadedIds.join(',')
+      if (idsKey !== loadedKey) {
+        // Check if items were only removed (subset of loaded)
+        const loadedSet = new Set(loadedIds)
+        const onlyRemoved = ids.length < loadedIds.length && ids.every((id) => loadedSet.has(id))
+        if (onlyRemoved && items.length > 0) {
+          // Filter locally instead of re-fetching
+          const remaining = new Set(ids)
+          items = items.filter((i) => remaining.has(i.id))
+          loadedIds = ids
+        } else {
+          loadItems(ids)
+        }
+      }
     }
   })
 
@@ -84,6 +101,7 @@
       itemMap.set(item.id, item)
     }
     items = ids.map((id) => itemMap.get(id)).filter((item): item is FeedItem => !!item)
+    loadedIds = ids
     loading = false
   }
 

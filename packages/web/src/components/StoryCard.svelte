@@ -4,7 +4,7 @@
   import { timeAgo, domainFrom } from '$lib/time'
   import SaveButton from './SaveButton.svelte'
   import { isRead, markRead } from '$lib/read-history.svelte'
-  import { getSummary, saveSummary, clearSummary, setExpanded } from '$lib/summaries.svelte'
+  import { getSummary, saveSummary, clearSummary, isExpanded, setExpanded, isOpExpanded, setOpExpanded } from '$lib/summaries.svelte'
   import { getSettings } from '$lib/settings.svelte'
   import { marked } from 'marked'
 
@@ -16,7 +16,14 @@
   let detailHref = $derived(hasDetailPage ? `/item/${item.id}` : item.sourceUrl)
   let isHn = $derived(item.source === SOURCE_ID.HN)
   let textOpen = $state(false)
+  let opExpanded = $state(true)
   let textExpanded = $state(false)
+
+  $effect(() => {
+    if (item.text) {
+      opExpanded = isOpExpanded(item.id)
+    }
+  })
 
   const appSettings = getSettings()
 
@@ -24,19 +31,28 @@
   let summaryLoading = $state(false)
   let summaryError = $state('')
   let summaryExpanded = $state(false)
+  let summaryFull = $state(false)
 
   let hasSummary = $derived(!!summaryText || summaryLoading || !!summaryError)
 
   $effect(() => {
     const cached = getSummary(item.id)
-    if (cached) summaryText = cached
+    if (cached) {
+      summaryText = cached
+      textOpen = true
+      summaryExpanded = isExpanded(item.id)
+    }
   })
 
   function triggerSummary(e: MouseEvent) {
     e.preventDefault()
     e.stopPropagation()
     textOpen = true
-    if (summaryText && !summaryLoading) return
+    if (summaryText && !summaryLoading) {
+      summaryExpanded = true
+      setExpanded(item.id, true)
+      return
+    }
     fetchSummary()
   }
 
@@ -63,13 +79,16 @@
       const text = await res.text()
       if (!res.ok) {
         summaryError = text
+        summaryExpanded = true
       } else {
         summaryText = text
+        summaryExpanded = true
         saveSummary(item.id, text)
         setExpanded(item.id, true)
       }
     } catch {
       summaryError = 'Failed to generate summary.'
+      summaryExpanded = true
     }
     summaryLoading = false
   }
@@ -102,6 +121,7 @@
     summaryText = ''
     summaryError = ''
     summaryExpanded = false
+    summaryFull = false
     summaryLoading = false
   }
 </script>
@@ -175,7 +195,7 @@
         class:has-text={!!item.text}
         class:active={textOpen}
         title={item.text ? 'Show post text' : 'No post content'}
-        onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); textOpen = !textOpen; if (!textOpen) textExpanded = false }}
+        onclick={(e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); textOpen = !textOpen; if (!textOpen) { textExpanded = false; opExpanded = true } }}
       >{textOpen ? '▾' : '▸'}</button>
       <button
         class="ai-toggle"
@@ -201,21 +221,28 @@
   {#if textOpen}
     <div class="text-panel">
       {#if item.text}
-        <span class="section-label">OP Comment</span>
-        <div class="text-content" class:expanded={textExpanded}>
-          {@html item.text}
-        </div>
-        <div class="panel-actions">
-          <button class="action-text" onclick={() => textExpanded = !textExpanded}>
-            {textExpanded ? 'Show less' : 'Show more'}
-          </button>
-          <span class="action-divider">|</span>
-          <button class="action-icon" onclick={copyOpText} title="Copy">
-            {opCopied ? '✓' : '⧉'}
-          </button>
-          <button class="action-icon" onclick={() => { textOpen = false; textExpanded = false }} title="Collapse">
-            ✕
-          </button>
+        <div class="op-section">
+          <div class="op-header" role="button" tabindex="0" onclick={() => { opExpanded = !opExpanded; setOpExpanded(item.id, opExpanded) }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { opExpanded = !opExpanded; setOpExpanded(item.id, opExpanded) } }}>
+            <span class="summary-label-group">
+              <span class="section-label">OP Comment</span>
+              <span class="summary-toggle-icon">{opExpanded ? '▾' : '▸'}</span>
+            </span>
+            <div class="summary-actions" onclick={(e) => e.stopPropagation()}>
+              <button class="action-icon" onclick={copyOpText} title="Copy">
+                {opCopied ? '✓' : '⧉'}
+              </button>
+            </div>
+          </div>
+          {#if opExpanded}
+            <div class="text-content" class:expanded={textExpanded}>
+              {@html item.text}
+            </div>
+            <div class="panel-actions">
+              <button class="action-text" onclick={() => textExpanded = !textExpanded}>
+                {textExpanded ? 'Show less' : 'Show more'}
+              </button>
+            </div>
+          {/if}
         </div>
       {:else if !hasSummary}
         <div class="no-content">No post content.</div>
@@ -223,31 +250,38 @@
 
       {#if hasSummary}
         <div class="summary-section" class:has-divider={!!item.text}>
-          <div class="summary-header">
-            <span class="summary-label">AI Summary</span>
-            {#if summaryLoading}
-              <span class="summary-spinner">✦</span>
+          <div class="summary-header" role="button" tabindex="0" onclick={() => { summaryExpanded = !summaryExpanded; setExpanded(item.id, summaryExpanded) }} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { summaryExpanded = !summaryExpanded; setExpanded(item.id, summaryExpanded) } }}>
+            <span class="summary-label-group">
+              <span class="summary-label">AI Summary</span>
+              {#if summaryLoading}
+                <span class="summary-spinner">✦</span>
+              {:else if summaryText}
+                <span class="summary-toggle-icon">{summaryExpanded ? '▾' : '▸'}</span>
+              {/if}
+            </span>
+            {#if summaryText && !summaryLoading}
+              <div class="summary-actions" onclick={(e) => e.stopPropagation()}>
+                <button class="action-icon" onclick={copySummary} title="Copy">
+                  {summaryCopied ? '✓' : '⧉'}
+                </button>
+                <button class="action-icon" onclick={fetchSummary} title="Regenerate">↻</button>
+                <button class="action-icon action-danger" onclick={dismissSummary} title="Dismiss">✕</button>
+              </div>
             {/if}
           </div>
-          {#if summaryError}
-            <p class="summary-error">{summaryError}</p>
-          {:else if summaryText}
-            <div class="summary-content" class:expanded={summaryExpanded}>
-              {@html marked(summaryText)}
-            </div>
-          {/if}
-          {#if summaryText && !summaryLoading}
-            <div class="panel-actions">
-              <button class="action-text" onclick={() => summaryExpanded = !summaryExpanded}>
-                {summaryExpanded ? 'Show less' : 'Show more'}
-              </button>
-              <span class="action-divider">|</span>
-              <button class="action-icon" onclick={copySummary} title="Copy">
-                {summaryCopied ? '✓' : '⧉'}
-              </button>
-              <button class="action-icon" onclick={fetchSummary} title="Regenerate">↻</button>
-              <button class="action-icon action-danger" onclick={dismissSummary} title="Dismiss">✕</button>
-            </div>
+          {#if summaryExpanded}
+            {#if summaryError}
+              <p class="summary-error">{summaryError}</p>
+            {:else if summaryText}
+              <div class="summary-content" class:full={summaryFull}>
+                {@html marked(summaryText)}
+              </div>
+              <div class="panel-actions">
+                <button class="action-text" onclick={() => summaryFull = !summaryFull}>
+                  {summaryFull ? 'Show less' : 'Show more'}
+                </button>
+              </div>
+            {/if}
           {/if}
         </div>
       {/if}
@@ -476,6 +510,14 @@
     cursor: default;
   }
 
+  .op-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    cursor: pointer;
+  }
+
   .section-label,
   .summary-label {
     font-size: 0.75rem;
@@ -499,28 +541,28 @@
     margin-top: 4px;
   }
 
-  .summary-content.expanded {
+  .summary-content.full {
     max-height: 300px;
     overflow: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--color-border) transparent;
   }
 
-  .summary-content.expanded::-webkit-scrollbar {
+  .summary-content.full::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
 
-  .summary-content.expanded::-webkit-scrollbar-track {
+  .summary-content.full::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .summary-content.expanded::-webkit-scrollbar-thumb {
+  .summary-content.full::-webkit-scrollbar-thumb {
     background: var(--color-border);
     border-radius: 3px;
   }
 
-  .summary-content.expanded::-webkit-scrollbar-thumb:hover {
+  .summary-content.full::-webkit-scrollbar-thumb:hover {
     background: var(--color-text-faint);
   }
 
@@ -544,8 +586,34 @@
 
   .summary-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 6px;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .summary-label-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .summary-toggle-icon {
+    font-size: 1.1rem;
+    color: var(--color-text-muted);
+    line-height: 0;
+    margin-top: -4px;
+  }
+
+  .summary-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .summary-label:hover {
+    color: var(--color-text);
   }
 
   .summary-spinner {

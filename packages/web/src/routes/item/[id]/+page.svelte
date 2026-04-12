@@ -61,6 +61,14 @@
     return null
   }
 
+  function countComments(items: CommentItem[]): number {
+    let count = 0
+    for (const c of items) {
+      count += 1 + countComments(c.children)
+    }
+    return count
+  }
+
   let displayedComments = $derived.by(() => {
     let result = comments
     if (focusStack.length > 0) {
@@ -70,6 +78,8 @@
     }
     return sortCommentTree(result, commentSort)
   })
+
+  let displayedCount = $derived(focusStack.length > 0 ? countComments(displayedComments) : commentCount)
 
   $effect(() => {
     loadItem(source, sourceId)
@@ -187,10 +197,14 @@
 
   function focusComment(commentId: string) {
     focusStack = [...focusStack, commentId]
+    collapseAll = false
+    refreshKey++
   }
 
   function unfocus() {
     focusStack = focusStack.slice(0, -1)
+    collapseAll = false
+    refreshKey++
   }
 
   const appSettings = getSettings()
@@ -390,7 +404,7 @@
       <div class="comment-controls">
         <div class="controls-left">
           <span class="comments-label">Comments</span>
-          <span class="comments-count">{commentCount}</span>
+          <span class="comments-count">{displayedCount}</span>
         </div>
         <div class="controls-right">
           <button class="control-btn" class:active={commentSort === 'default'} onclick={() => commentSort = 'default'}>Default</button>

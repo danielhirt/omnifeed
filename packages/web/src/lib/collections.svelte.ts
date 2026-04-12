@@ -85,8 +85,12 @@ export async function addToCollection(collectionId: string, itemId: string): Pro
 export async function removeFromCollection(collectionId: string, itemId: string): Promise<void> {
   await ensureInit()
   if (!adapter) return
-  await adapter.removeFromCollection(collectionId, itemId)
-  await refresh()
+  const col = collections.find((c) => c.id === collectionId)
+  if (!col) return
+  col.itemIds = col.itemIds.filter((id) => id !== itemId)
+  col.updatedAt = Date.now()
+  await adapter.saveCollection({ id: col.id, name: col.name, color: col.color, itemIds: [...col.itemIds], createdAt: col.createdAt, updatedAt: col.updatedAt })
+  collections = [...collections]
 }
 
 export async function getCollectionsForItem(itemId: string): Promise<Collection[]> {

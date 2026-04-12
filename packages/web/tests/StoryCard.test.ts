@@ -7,6 +7,7 @@ const mockGetSummary = vi.fn(() => undefined as string | undefined)
 const mockSaveSummary = vi.fn()
 const mockClearSummary = vi.fn()
 const mockSetExpanded = vi.fn()
+const mockIsExpanded = vi.fn(() => false)
 
 vi.mock('$lib/read-history.svelte', () => ({
   isRead: () => false,
@@ -24,7 +25,9 @@ vi.mock('$lib/summaries.svelte', () => ({
   saveSummary: (...args: unknown[]) => mockSaveSummary(...args),
   clearSummary: (...args: unknown[]) => mockClearSummary(...args),
   setExpanded: (...args: unknown[]) => mockSetExpanded(...args),
-  isExpanded: () => false,
+  isExpanded: (...args: unknown[]) => mockIsExpanded(...args),
+  isOpExpanded: () => true,
+  setOpExpanded: vi.fn(),
 }))
 
 vi.mock('$lib/settings.svelte', () => ({
@@ -185,17 +188,16 @@ describe('StoryCard text toggle', () => {
       expect(textBtn.textContent?.trim()).toBe('Show more')
     })
 
-    it('shows text action plus two icon actions (copy, close)', async () => {
+    it('shows OP header with copy icon and Show more text action', async () => {
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>Content</p>' }), index: 0 },
       })
       await fireEvent.click(container.querySelector('.text-toggle')!)
+      const header = container.querySelector('.op-header')!
+      const copyIcon = header.querySelector('.action-icon')!
+      expect(copyIcon.textContent?.trim()).toBe('⧉')
       const textBtn = container.querySelector('.action-text')!
       expect(textBtn.textContent?.trim()).toBe('Show more')
-      const icons = container.querySelectorAll('.action-icon')
-      expect(icons).toHaveLength(2)
-      expect(icons[0].textContent?.trim()).toBe('⧉')
-      expect(icons[1].textContent?.trim()).toBe('✕')
     })
 
     it('toggles text-content to expanded on "Show more" click', async () => {
@@ -234,19 +236,19 @@ describe('StoryCard text toggle', () => {
       expect(toggle.textContent?.trim()).toBe('Show more')
     })
 
-    it('closes the entire panel on "Collapse" click', async () => {
+    it('closes the entire panel via card toggle', async () => {
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>Content</p>' }), index: 0 },
       })
-      await fireEvent.click(container.querySelector('.text-toggle')!)
+      const toggleBtn = container.querySelector('.text-toggle')!
+      await fireEvent.click(toggleBtn)
       expect(container.querySelector('.text-panel')).toBeTruthy()
 
-      const collapse = container.querySelectorAll('.action-icon')[1]
-      await fireEvent.click(collapse)
+      await fireEvent.click(toggleBtn)
       expect(container.querySelector('.text-panel')).toBeNull()
     })
 
-    it('resets expanded state when panel is closed via toggle icon', async () => {
+    it('resets expanded state when panel is closed via toggle', async () => {
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>Content</p>' }), index: 0 },
       })
@@ -267,28 +269,25 @@ describe('StoryCard text toggle', () => {
       expect(content.classList.contains('expanded')).toBe(false)
     })
 
-    it('resets expanded state when panel is closed via Collapse button', async () => {
+    it('collapses OP section via header click', async () => {
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>Content</p>' }), index: 0 },
       })
-      const toggleBtn = container.querySelector('.text-toggle')!
+      await fireEvent.click(container.querySelector('.text-toggle')!)
+      expect(container.querySelector('.text-content')).toBeTruthy()
 
-      // Open and expand
-      await fireEvent.click(toggleBtn)
-      await fireEvent.click(container.querySelector('.action-text')!)
+      // Collapse OP section via its header
+      await fireEvent.click(container.querySelector('.op-header')!)
+      expect(container.querySelector('.text-content')).toBeNull()
 
-      // Collapse
-      await fireEvent.click(container.querySelectorAll('.action-icon')[1])
-
-      // Reopen — should be in preview mode
-      await fireEvent.click(toggleBtn)
-      const content = container.querySelector('.text-content')!
-      expect(content.classList.contains('expanded')).toBe(false)
+      // Expand again
+      await fireEvent.click(container.querySelector('.op-header')!)
+      expect(container.querySelector('.text-content')).toBeTruthy()
     })
   })
 
   describe('toggle icon reflects panel state', () => {
-    it('reverts to ▸ after Collapse', async () => {
+    it('reverts to ▸ after closing panel', async () => {
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>Content</p>' }), index: 0 },
       })
@@ -296,7 +295,7 @@ describe('StoryCard text toggle', () => {
       await fireEvent.click(toggleBtn)
       expect(toggleBtn.textContent).toBe('▾')
 
-      await fireEvent.click(container.querySelectorAll('.action-icon')[1])
+      await fireEvent.click(toggleBtn)
       expect(toggleBtn.textContent).toBe('▸')
     })
 
@@ -448,7 +447,7 @@ describe('StoryCard AI summary', () => {
   })
 
   describe('summary controls', () => {
-    it('shows action icons (expand, copy, regenerate, dismiss) after loading', async () => {
+    it('shows action icons (copy, regenerate, dismiss) in header after loading', async () => {
       vi.mocked(fetch).mockResolvedValueOnce(new Response('summary', { status: 200 }))
       const { container } = render(StoryCard, {
         props: { item: makeItem(), index: 0 },
@@ -458,16 +457,14 @@ describe('StoryCard AI summary', () => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
       const section = container.querySelector('.summary-section')!
-      const textBtn = section.querySelector('.action-text')!
-      expect(textBtn.textContent?.trim()).toBe('Show more')
-      const icons = section.querySelectorAll('.action-icon')
+      const icons = section.querySelectorAll('.summary-actions .action-icon')
       expect(icons).toHaveLength(3)
       expect(icons[0].textContent?.trim()).toBe('⧉')
       expect(icons[1].textContent?.trim()).toBe('↻')
       expect(icons[2].textContent?.trim()).toBe('✕')
     })
 
-    it('toggles summary expanded state on Show more click', async () => {
+    it('toggles summary via header click', async () => {
       vi.mocked(fetch).mockResolvedValueOnce(new Response('summary', { status: 200 }))
       const { container } = render(StoryCard, {
         props: { item: makeItem(), index: 0 },
@@ -476,13 +473,12 @@ describe('StoryCard AI summary', () => {
       await vi.waitFor(() => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
-      const summaryContent = container.querySelector('.summary-content')!
-      expect(summaryContent.classList.contains('expanded')).toBe(false)
-
-      const showMore = container.querySelector('.summary-section .action-text')!
-      await fireEvent.click(showMore)
-      expect(summaryContent.classList.contains('expanded')).toBe(true)
-      expect(showMore.textContent?.trim()).toBe('Show less')
+      // Click header to collapse
+      await fireEvent.click(container.querySelector('.summary-header')!)
+      expect(container.querySelector('.summary-content')).toBeNull()
+      // Click header to expand again
+      await fireEvent.click(container.querySelector('.summary-header')!)
+      expect(container.querySelector('.summary-content')).toBeTruthy()
     })
 
     it('clears summary on Dismiss click', async () => {
@@ -494,7 +490,7 @@ describe('StoryCard AI summary', () => {
       await vi.waitFor(() => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
-      const dismiss = container.querySelector('.summary-section')!.querySelectorAll('.action-icon')[2]
+      const dismiss = container.querySelector('.summary-actions')!.querySelectorAll('.action-icon')[2]
       await fireEvent.click(dismiss)
       expect(container.querySelector('.summary-section')).toBeNull()
       expect(mockClearSummary).toHaveBeenCalledWith('hn:7')
@@ -511,21 +507,21 @@ describe('StoryCard AI summary', () => {
       await vi.waitFor(() => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
-      const regen = container.querySelector('.summary-section')!.querySelectorAll('.action-icon')[1]
+      const regen = container.querySelector('.summary-actions')!.querySelectorAll('.action-icon')[1]
       await fireEvent.click(regen)
       await vi.waitFor(() => {
         expect(fetch).toHaveBeenCalledTimes(2)
       })
     })
 
-    it('does not show controls while loading', async () => {
+    it('does not show action icons while loading', async () => {
       vi.mocked(fetch).mockReturnValueOnce(new Promise(() => {}))
       const { container } = render(StoryCard, {
         props: { item: makeItem(), index: 0 },
       })
       await fireEvent.click(container.querySelector('.ai-toggle')!)
       const section = container.querySelector('.summary-section')!
-      expect(section.querySelector('.panel-actions')).toBeNull()
+      expect(section.querySelector('.summary-actions')).toBeNull()
     })
   })
 
@@ -564,8 +560,10 @@ describe('StoryCard AI summary', () => {
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>OP text</p>' }), index: 0 },
       })
-      await fireEvent.click(container.querySelector('.text-toggle')!)
-      expect(container.querySelector('.text-content')).toBeTruthy()
+      // Panel auto-opens when cached summary exists
+      await vi.waitFor(() => {
+        expect(container.querySelector('.text-content')).toBeTruthy()
+      })
       expect(container.querySelector('.summary-section')).toBeTruthy()
     })
 
@@ -574,7 +572,9 @@ describe('StoryCard AI summary', () => {
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>OP text</p>' }), index: 0 },
       })
-      await fireEvent.click(container.querySelector('.text-toggle')!)
+      await vi.waitFor(() => {
+        expect(container.querySelector('.summary-section')).toBeTruthy()
+      })
       const section = container.querySelector('.summary-section')!
       expect(section.querySelector('.summary-label')!.textContent).toBe('AI Summary')
     })
@@ -584,7 +584,9 @@ describe('StoryCard AI summary', () => {
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>text</p>' }), index: 0 },
       })
-      await fireEvent.click(container.querySelector('.text-toggle')!)
+      await vi.waitFor(() => {
+        expect(container.querySelector('.summary-section')).toBeTruthy()
+      })
       expect(container.querySelector('.summary-section')!.classList.contains('has-divider')).toBe(true)
     })
 
@@ -614,7 +616,7 @@ describe('StoryCard AI summary', () => {
       await vi.waitFor(() => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
-      const buttons = container.querySelector('.summary-section')!.querySelectorAll('.action-icon')
+      const buttons = container.querySelector('.summary-actions')!.querySelectorAll('.action-icon')
       expect(buttons[0].textContent?.trim()).toBe('⧉')
     })
 
@@ -627,7 +629,7 @@ describe('StoryCard AI summary', () => {
       await vi.waitFor(() => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
-      const copyBtn = container.querySelector('.summary-section')!.querySelectorAll('.action-icon')[0]
+      const copyBtn = container.querySelector('.summary-actions')!.querySelectorAll('.action-icon')[0]
       await fireEvent.click(copyBtn)
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith('summary to copy')
     })
@@ -641,7 +643,7 @@ describe('StoryCard AI summary', () => {
       await vi.waitFor(() => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
-      const copyBtn = container.querySelector('.summary-section')!.querySelectorAll('.action-icon')[0]
+      const copyBtn = container.querySelector('.summary-actions')!.querySelectorAll('.action-icon')[0]
       await fireEvent.click(copyBtn)
       expect(copyBtn.textContent?.trim()).toBe('✓')
     })
@@ -724,11 +726,11 @@ describe('StoryCard AI summary', () => {
         expect(container.querySelector('.summary-content')).toBeTruthy()
       })
       // Dismiss the summary
-      const dismiss = container.querySelector('.summary-section')!.querySelectorAll('.action-icon')[2]
+      const dismiss = container.querySelector('.summary-section .summary-actions')!.querySelectorAll('.action-icon')[2]
       await fireEvent.click(dismiss)
       // Panel should still be open with OP text
       expect(container.querySelector('.text-panel')).toBeTruthy()
-      expect(container.querySelector('.text-content')).toBeTruthy()
+      expect(container.querySelector('.op-section')).toBeTruthy()
       expect(container.querySelector('.summary-section')).toBeNull()
     })
   })
@@ -736,30 +738,38 @@ describe('StoryCard AI summary', () => {
   describe('independent expand states', () => {
     it('expands summary without expanding OP text', async () => {
       mockGetSummary.mockReturnValue('cached summary')
+      mockIsExpanded.mockReturnValue(false)
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>OP text</p>' }), index: 0 },
       })
-      await fireEvent.click(container.querySelector('.text-toggle')!)
-      // Expand summary only
-      const summaryShowMore = container.querySelector('.summary-section .action-text')!
-      await fireEvent.click(summaryShowMore)
+      // Panel auto-opens with cached summary (collapsed)
+      await vi.waitFor(() => {
+        expect(container.querySelector('.summary-section')).toBeTruthy()
+      })
+      expect(container.querySelector('.summary-content')).toBeNull()
+      // Expand summary via header click
+      await fireEvent.click(container.querySelector('.summary-header')!)
       // Summary expanded, OP text still in preview
-      expect(container.querySelector('.summary-content')!.classList.contains('expanded')).toBe(true)
+      expect(container.querySelector('.summary-content')).toBeTruthy()
       expect(container.querySelector('.text-content')!.classList.contains('expanded')).toBe(false)
     })
 
     it('expands OP text without expanding summary', async () => {
       mockGetSummary.mockReturnValue('cached summary')
+      mockIsExpanded.mockReturnValue(false)
       const { container } = render(StoryCard, {
         props: { item: makeItem({ text: '<p>OP text</p>' }), index: 0 },
       })
-      await fireEvent.click(container.querySelector('.text-toggle')!)
+      // Panel auto-opens with cached summary (collapsed)
+      await vi.waitFor(() => {
+        expect(container.querySelector('.summary-section')).toBeTruthy()
+      })
       // Expand OP text only
       const textShowMore = container.querySelectorAll('.panel-actions')[0].querySelector('.action-text')!
       await fireEvent.click(textShowMore)
-      // OP text expanded, summary still in preview
+      // OP text expanded, summary still collapsed (content not rendered)
       expect(container.querySelector('.text-content')!.classList.contains('expanded')).toBe(true)
-      expect(container.querySelector('.summary-content')!.classList.contains('expanded')).toBe(false)
+      expect(container.querySelector('.summary-content')).toBeNull()
     })
   })
 
