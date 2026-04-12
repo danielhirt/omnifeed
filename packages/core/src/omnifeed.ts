@@ -9,10 +9,15 @@ export const OMNIFEED_MAP: Record<OmnifeedMode, Record<ContentSource, string>> =
   hottest: { hackernews: 'top', lobsters: 'hottest', devto: 'top' },
 }
 
+export type OmnifeedSort = 'newest' | 'score'
+
 export function mergeFeeds(
-  feedsBySource: Partial<Record<ContentSource, FeedItem[]>>
+  feedsBySource: Partial<Record<ContentSource, FeedItem[]>>,
+  sort: OmnifeedSort = 'newest'
 ): FeedItem[] {
-  return (Object.values(feedsBySource) as FeedItem[][])
-    .flat()
-    .sort((a, b) => b.timestamp - a.timestamp)
+  const items = (Object.values(feedsBySource) as FeedItem[][]).flat()
+  if (sort === 'score') {
+    return items.sort((a, b) => b.score - a.score)
+  }
+  return items.sort((a, b) => b.timestamp - a.timestamp)
 }

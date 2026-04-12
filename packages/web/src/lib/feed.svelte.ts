@@ -134,7 +134,8 @@ export async function loadOmnifeed(mode: OmnifeedMode) {
 
     const feedsBySource: Partial<Record<ContentSource, FeedItem[]>> = {}
     sourceIds.forEach((id, i) => { feedsBySource[id] = results[i] })
-    const merged = mergeFeeds(feedsBySource)
+    const sortBy = mode === 'hottest' ? 'score' as const : 'newest' as const
+    const merged = mergeFeeds(feedsBySource, sortBy)
 
     items = merged
     cache.set(key, { items: merged, currentPage: 0, exhausted: false })
@@ -215,7 +216,10 @@ export async function loadMore() {
       entry.exhausted = true
     } else {
       entry.currentPage++
-      entry.items = [...entry.items, ...newItems].sort((a, b) => b.timestamp - a.timestamp)
+      const sortFn = omnifeedMode === 'hottest'
+        ? (a: FeedItem, b: FeedItem) => b.score - a.score
+        : (a: FeedItem, b: FeedItem) => b.timestamp - a.timestamp
+      entry.items = [...entry.items, ...newItems].sort(sortFn)
       items = entry.items
     }
 

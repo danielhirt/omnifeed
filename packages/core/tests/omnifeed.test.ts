@@ -70,6 +70,23 @@ describe('mergeFeeds', () => {
     })
     expect(items.map(i => i.timestamp)).toEqual([300, 200, 100])
   })
+
+  it('sorts by score descending when sort is "score"', () => {
+    const items = mergeFeeds({
+      hackernews: [makeFeedItem({ source: 'hackernews', timestamp: 300, score: 10 })],
+      lobsters: [makeFeedItem({ source: 'lobsters', timestamp: 100, score: 500 })],
+      devto: [makeFeedItem({ source: 'devto', timestamp: 200, score: 50 })],
+    }, 'score')
+    expect(items.map(i => i.score)).toEqual([500, 50, 10])
+  })
+
+  it('defaults to newest sort when no sort parameter given', () => {
+    const items = mergeFeeds({
+      hackernews: [makeFeedItem({ source: 'hackernews', timestamp: 100, score: 500 })],
+      lobsters: [makeFeedItem({ source: 'lobsters', timestamp: 300, score: 10 })],
+    })
+    expect(items.map(i => i.timestamp)).toEqual([300, 100])
+  })
 })
 
 describe('OMNIFEED_MAP', () => {
