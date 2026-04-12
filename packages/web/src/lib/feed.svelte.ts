@@ -5,6 +5,10 @@ import {
   type SourceClient,
   type ContentSource,
   type FeedItem,
+  type OmnifeedMode,
+  type FeedView,
+  OMNIFEED_MAP,
+  mergeFeeds,
 } from '@omnifeed/core'
 
 interface FeedCache {
@@ -30,10 +34,13 @@ function getClient(source: ContentSource): SourceClient {
   return client
 }
 
+let requestId = 0
 let currentKey = $state('')
 let currentSource = $state<ContentSource>('hackernews')
 let currentFeedId = $state('top')
 let currentTag = $state<string | null>(null)
+let currentView = $state<FeedView>('omnifeed')
+let omnifeedMode = $state<OmnifeedMode>('newest')
 let items = $state<FeedItem[]>([])
 let loading = $state(false)
 let loadingMore = $state(false)
@@ -46,16 +53,20 @@ export function getFeedState() {
     get source() { return currentSource },
     get feedId() { return currentFeedId },
     get tag() { return currentTag },
+    get view() { return currentView },
+    get omnifeedMode() { return omnifeedMode },
   }
 }
 
 export async function loadFeed(source: ContentSource, feedId: string, tag?: string | null) {
+  currentView = source
   const key = tag ? `${source}:tag:${tag}` : `${source}:${feedId}`
   if (key === currentKey && items.length > 0) return
 
+  const thisRequest = ++requestId
   currentKey = key
   currentSource = source
-  currentFeedId = feedId
+  if (!tag) currentFeedId = feedId
   currentTag = tag ?? null
   loadMoreCooldown = false
 
@@ -75,13 +86,61 @@ export async function loadFeed(source: ContentSource, feedId: string, tag?: stri
     } else {
       result = await client.fetchFeed(feedId, 0)
     }
+    if (thisRequest !== requestId) return
     items = result
     cache.set(key, { items: result, currentPage: 0, exhausted: result.length === 0 })
   } catch (err) {
+    if (thisRequest !== requestId) return
     console.error(`Failed to load ${source}/${feedId}:`, err)
     items = []
   }
   loading = false
+}
+
+export async function loadOmnifeed(mode: OmnifeedMode) {
+  const key = `omnifeed:${mode}`
+  omnifeedMode = mode
+  currentView = 'omnifeed'
+
+  // Check cache
+  const cached = cache.get(key)
+  if (cached && currentKey === key) {
+    items = cached.items
+    return
+  }
+
+  currentKey = key
+  loading = true
+  items = []
+  const myRequestId = ++requestId
+
+  try {
+    const sourceIds: ContentSource[] = ['hackernews', 'lobsters', 'devto']
+    const feedMap = OMNIFEED_MAP[mode]
+
+    const results = await Promise.all(
+      sourceIds.map(async (sourceId) => {
+        try {
+          const client = getClient(sourceId)
+          return await client.fetchFeed(feedMap[sourceId], 0)
+        } catch (err) {
+          console.error(`Failed to fetch ${sourceId}:`, err)
+          return [] as FeedItem[]
+        }
+      })
+    )
+
+    if (myRequestId !== requestId) return
+
+    const feedsBySource: Partial<Record<ContentSource, FeedItem[]>> = {}
+    sourceIds.forEach((id, i) => { feedsBySource[id] = results[i] })
+    const merged = mergeFeeds(feedsBySource)
+
+    items = merged
+    cache.set(key, { items: merged, currentPage: 0, exhausted: false })
+  } finally {
+    if (myRequestId === requestId) loading = false
+  }
 }
 
 let customRefresh: (() => void) | null = null
@@ -95,6 +154,12 @@ export async function refreshFeed() {
     customRefresh()
     return
   }
+  if (currentView === 'omnifeed') {
+    cache.delete(currentKey)
+    await loadOmnifeed(omnifeedMode)
+    return
+  }
+  const thisRequest = ++requestId
   cache.delete(currentKey)
   const client = getClient(currentSource)
   if ('clearCache' in client && typeof (client as any).clearCache === 'function') {
@@ -102,10 +167,17 @@ export async function refreshFeed() {
   }
   loading = true
   try {
-    const result = await client.fetchFeed(currentFeedId, 0)
+    let result: FeedItem[]
+    if (currentTag && client.fetchTag) {
+      result = await client.fetchTag(currentTag, 0)
+    } else {
+      result = await client.fetchFeed(currentFeedId, 0)
+    }
+    if (thisRequest !== requestId) return
     items = result
     cache.set(currentKey, { items: result, currentPage: 0, exhausted: result.length === 0 })
   } catch (err) {
+    if (thisRequest !== requestId) return
     console.error('Failed to refresh feed:', err)
     items = []
   }
@@ -119,7 +191,40 @@ export async function loadMore() {
   const entry = cache.get(currentKey)
   if (!entry || entry.exhausted) return
 
+  const thisRequest = ++requestId
   loadingMore = true
+
+  if (currentView === 'omnifeed') {
+    const sourceIds: ContentSource[] = ['hackernews', 'lobsters', 'devto']
+    const feedMap = OMNIFEED_MAP[omnifeedMode]
+
+    const results = await Promise.all(
+      sourceIds.map(async (sourceId) => {
+        try {
+          const client = getClient(sourceId)
+          return await client.fetchFeed(feedMap[sourceId], entry.currentPage + 1)
+        } catch {
+          return [] as FeedItem[]
+        }
+      })
+    )
+
+    const newItems = results.flat()
+
+    if (newItems.length === 0) {
+      entry.exhausted = true
+    } else {
+      entry.currentPage++
+      entry.items = [...entry.items, ...newItems].sort((a, b) => b.timestamp - a.timestamp)
+      items = entry.items
+    }
+
+    loadingMore = false
+    loadMoreCooldown = true
+    setTimeout(() => { loadMoreCooldown = false }, 5000)
+    return
+  }
+
   try {
     const nextPage = entry.currentPage + 1
     const client = getClient(currentSource)
@@ -129,6 +234,7 @@ export async function loadMore() {
     } else {
       result = await client.fetchFeed(currentFeedId, nextPage)
     }
+    if (thisRequest !== requestId) return
     if (result.length === 0) {
       entry.exhausted = true
     } else {
@@ -137,10 +243,12 @@ export async function loadMore() {
       entry.currentPage = nextPage
     }
   } catch (err) {
+    if (thisRequest !== requestId) return
     console.error('Failed to load more:', err)
     // Back off to prevent retry storms on rate limits
     loadMoreCooldown = true
     setTimeout(() => { loadMoreCooldown = false }, 5000)
+  } finally {
+    loadingMore = false
   }
-  loadingMore = false
 }
