@@ -1,4 +1,5 @@
 export * from './models.js'
+export * from './omnifeed.js'
 export * from './cache.js'
 export * from './client.js'
 export * from './feeds.js'
