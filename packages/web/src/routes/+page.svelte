@@ -270,7 +270,7 @@
     {/each}
   {:else if filteredItems.length > 0}
     {#each filteredItems as item, i (item.id)}
-      <StoryCard {item} index={i} selected={i === kb.selectedIndex} />
+      <StoryCard {item} index={i} selected={i === kb.selectedIndex} showSourceBadge={isOmnifeed} />
     {/each}
     {#if feed.loadingMore}
       {#each Array(5) as _}
