@@ -296,7 +296,6 @@
   .search-form {
     display: flex;
     gap: 6px;
-    margin-right: auto;
   }
 
   .search-field {
@@ -366,7 +365,6 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-right: auto;
     font-size: 0.85rem;
   }
 

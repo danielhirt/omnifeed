@@ -53,8 +53,8 @@
       class:active={sourceFilter === 'devto'}
       onclick={() => sourceFilter = sourceFilter === 'devto' ? 'all' : 'devto'}
     >DEV</button>
-    <span class="filter-sep">|</span>
   {/if}
+  <span class="spacer"></span>
   <button
     class="filter-btn"
     class:active={filter === 'all'}
@@ -77,11 +77,14 @@
 <style>
   .feed-controls {
     display: flex;
-    justify-content: flex-end;
     align-items: center;
     gap: 4px;
     padding: 6px 0;
     border-bottom: 1px solid var(--color-border);
+  }
+
+  .spacer {
+    flex: 1;
   }
 
   .filter-btn {
