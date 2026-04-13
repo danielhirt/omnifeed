@@ -59,6 +59,8 @@ let currentFeedId = $state('top')
 let currentTag = $state<string | null>(null)
 let currentView = $state<FeedView>('omnifeed')
 let omnifeedMode = $state<OmnifeedMode>('newest')
+let sourceFilter = $state<string>('all')
+let feedFilter = $state<string>('all')
 let items = $state<FeedItem[]>([])
 let loading = $state(false)
 let loadingMore = $state(false)
@@ -73,6 +75,10 @@ export function getFeedState() {
     get tag() { return currentTag },
     get view() { return currentView },
     get omnifeedMode() { return omnifeedMode },
+    get sourceFilter() { return sourceFilter },
+    set sourceFilter(v: string) { sourceFilter = v },
+    get feedFilter() { return feedFilter },
+    set feedFilter(v: string) { feedFilter = v },
   }
 }
 

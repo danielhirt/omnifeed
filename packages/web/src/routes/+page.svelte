@@ -32,11 +32,25 @@
 
   let isHn = $derived(source === SOURCE_ID.HN)
 
-  // Feed filter
-  let feedFilter = $state<FeedFilter>('all')
+  // Feed filters — persisted in store so they survive page remounts
   let omnifeedMode = $state<OmnifeedMode>(feed.omnifeedMode)
-  let sourceFilter = $state<SourceFilter>('all')
+  let sourceFilter = $state<SourceFilter>(feed.sourceFilter as SourceFilter)
+  let feedFilter = $state<FeedFilter>(feed.feedFilter as FeedFilter)
   let savedIds = $derived(new Set(cols.value.flatMap(c => c.itemIds)))
+
+  // Sync filter state to store for persistence across navigation
+  $effect(() => { feed.sourceFilter = sourceFilter })
+  $effect(() => { feed.feedFilter = feedFilter })
+
+  // Reset filters when view context changes, but not on initial mount (preserves store values)
+  let viewKey = $derived(`${isOmnifeed}:${source}:${feedId}:${tag}`)
+  let mounted = false
+  $effect(() => {
+    viewKey
+    if (!mounted) { mounted = true; return }
+    feedFilter = 'all'
+    sourceFilter = 'all'
+  })
 
   let filteredItems = $derived.by(() => {
     let result = feed.items
@@ -46,13 +60,6 @@
     if (feedFilter === 'unread') return result.filter(item => !isRead(item.id))
     if (feedFilter === 'saved') return result.filter(item => savedIds.has(item.id))
     return result
-  })
-
-  // Reset filter when view context changes (not on mode switch within omnifeed)
-  $effect(() => {
-    source; feedId; tag; isOmnifeed;
-    feedFilter = 'all'
-    sourceFilter = 'all'
   })
 
   // Search state
