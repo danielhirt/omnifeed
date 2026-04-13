@@ -34,7 +34,7 @@
 
   // Feed filter
   let feedFilter = $state<FeedFilter>('all')
-  let omnifeedMode = $state<OmnifeedMode>('newest')
+  let omnifeedMode = $state<OmnifeedMode>(feed.omnifeedMode)
   let sourceFilter = $state<SourceFilter>('all')
   let savedIds = $derived(new Set(cols.value.flatMap(c => c.itemIds)))
 

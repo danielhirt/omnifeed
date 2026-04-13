@@ -27,7 +27,9 @@
   )
   let sourceConfig = $derived(SOURCES.find(s => s.id === currentSource) ?? SOURCES[0])
   let isOmnifeed = $derived(
-    page.url.pathname === '/' && !new URLSearchParams(page.url.search).has('source')
+    page.url.pathname === '/'
+      ? !new URLSearchParams(page.url.search).has('source')
+      : feed.view === 'omnifeed'
   )
 </script>
 
