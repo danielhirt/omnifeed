@@ -31,6 +31,12 @@
       ? !new URLSearchParams(page.url.search).has('source')
       : feed.view === 'omnifeed'
   )
+
+  let homeHref = $derived(
+    isOmnifeed
+      ? '/'
+      : `/?source=${currentSource}&feed=${currentFeed}`
+  )
 </script>
 
 <nav class="navbar">
@@ -42,6 +48,7 @@
     >
       {isOmnifeed ? 'Omnifeed' : sourceConfig.shortName} <span class="arrow">▾</span>
     </button>
+    <a href={homeHref} class="home-btn" title="Go to feed"><svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M8 1L1 7h2.5v6h3.75V9.5h1.5V13h3.75V7H15z"/></svg></a>
     {#if showSourceMenu}
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -107,6 +114,8 @@
 
   .source-selector {
     position: relative;
+    display: flex;
+    align-items: center;
   }
 
   .source-btn {
@@ -120,6 +129,18 @@
 
   .source-btn:hover {
     opacity: 0.8;
+  }
+
+  .home-btn {
+    display: flex;
+    align-items: center;
+    color: var(--color-text-faint);
+    text-decoration: none;
+    margin-left: 6px;
+  }
+
+  .home-btn:hover {
+    color: var(--color-text);
   }
 
   .arrow {
