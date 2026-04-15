@@ -15,6 +15,7 @@
   import { getSettings } from '$lib/settings.svelte'
   import { sortCommentTree, type CommentSortMode } from '$lib/sort-filter'
   import { sanitizeHtml } from '$lib/sanitize'
+  import { showToast, updateToast } from '$lib/toast.svelte'
 
   const hnClient = new HnClient()
   const lobstersClient = new LobstersClient(undefined, '/api/lobsters?path=')
@@ -309,6 +310,73 @@
     }
     summaryLoading = false
   }
+
+  async function saveToObsidian() {
+    const toastId = showToast('Saving to Obsidian...')
+
+    try {
+      // Step 1: Get or generate summary
+      let summary = getSummary(itemId)
+      if (!summary) {
+        const body: Record<string, unknown> = { model: appSettings.value.model }
+        if (source === SOURCE_ID.HN) {
+          body.storyId = Number(sourceId)
+        } else {
+          body.title = title
+          body.url = url
+          body.text = bodyText
+          body.comments = comments.slice(0, 30).map(c => ({
+            author: c.author,
+            text: stripHtml(c.text),
+          }))
+        }
+
+        const sumRes = await fetch('/api/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+
+        if (!sumRes.ok) {
+          const errText = await sumRes.text()
+          updateToast(toastId, `Summary failed: ${errText}`, 'error')
+          return
+        }
+
+        summary = await sumRes.text()
+        saveSummary(itemId, summary)
+        summaryText = summary
+        summaryExpanded = true
+        setExpanded(itemId, true)
+      }
+
+      // Step 2: Save to Obsidian
+      updateToast(toastId, 'Writing to Obsidian...')
+
+      const saveRes = await fetch('/api/obsidian-save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          url,
+          bodyText: url ? undefined : bodyText,
+          summary,
+          source,
+          author,
+          tags,
+        }),
+      })
+
+      const result = await saveRes.json()
+      if (saveRes.ok && result.success) {
+        updateToast(toastId, 'Saved to Obsidian', 'success')
+      } else {
+        updateToast(toastId, result.message ?? 'Failed to save', 'error')
+      }
+    } catch {
+      updateToast(toastId, 'Failed to save to Obsidian', 'error')
+    }
+  }
 </script>
 
 {#if loading}
@@ -352,7 +420,7 @@
     </div>
     <div class="header-actions">
       <button class="ai-btn" onclick={toggleSummary} title="AI summary" disabled={summaryLoading}>✦</button>
-      <SaveButton {itemId} />
+      <SaveButton {itemId} onobsidian={saveToObsidian} />
       {#if url}
         <a href={url} target="_blank" rel="noopener" class="open-link" title="Open link">↗</a>
       {/if}
