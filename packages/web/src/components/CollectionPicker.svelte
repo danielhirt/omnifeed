@@ -6,11 +6,13 @@
     itemCollections,
     onselect,
     onclose,
+    onobsidian,
   }: {
     collections: Collection[]
     itemCollections: Collection[]
     onselect: (collectionId: string) => void
     onclose: () => void
+    onobsidian?: () => void
   } = $props()
 
   let memberIds = $derived(new Set(itemCollections.map((c) => c.id)))
@@ -20,6 +22,15 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="picker" onclick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+  {#if onobsidian}
+    <button
+      class="picker-item obsidian-item"
+      onclick={(e) => { e.preventDefault(); e.stopPropagation(); onobsidian(); onclose(); }}
+    >
+      <span>Save to Obsidian</span>
+    </button>
+    <div class="picker-divider"></div>
+  {/if}
   {#each collections as col (col.id)}
     <button
       class="picker-item"
@@ -80,5 +91,19 @@
   .check {
     margin-left: auto;
     font-size: 0.75rem;
+  }
+
+  .picker-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 2px 0;
+  }
+
+  .obsidian-item {
+    color: var(--color-text-muted);
+  }
+
+  .obsidian-item:hover {
+    color: var(--color-text);
   }
 </style>

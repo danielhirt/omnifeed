@@ -7,7 +7,7 @@
   } from '$lib/collections.svelte'
   import CollectionPicker from './CollectionPicker.svelte'
 
-  let { itemId }: { itemId: string } = $props()
+  let { itemId, onobsidian }: { itemId: string; onobsidian?: () => void } = $props()
 
   const cols = getCollections()
 
@@ -27,7 +27,7 @@
     e.preventDefault()
     e.stopPropagation()
 
-    if (cols.value.length <= 1) {
+    if (cols.value.length <= 1 && !onobsidian) {
       if (saved) {
         await removeFromCollection(DEFAULT_COLLECTION_ID, itemId)
       } else {
@@ -64,6 +64,7 @@
       {itemCollections}
       onselect={handleSelect}
       onclose={() => (showPicker = false)}
+      {onobsidian}
     />
   {/if}
 </div>
