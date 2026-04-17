@@ -39,7 +39,8 @@
   let tags = $state<string[]>([])
 
   let comments = $state<CommentItem[]>([])
-  let loading = $state(true)
+  let storyLoading = $state(true)
+  let commentsLoading = $state(false)
   let flagged = $state(false)
   let refreshKey = $state(0)
   let refreshingComments = $state(false)
@@ -97,7 +98,8 @@
   })
 
   async function loadItem(src: ContentSource, id: string) {
-    loading = true
+    storyLoading = true
+    commentsLoading = false
     flagged = false
     focusStack = []
     comments = []
@@ -112,14 +114,16 @@
       }
     } catch {
       flagged = true
+      storyLoading = false
+      commentsLoading = false
     }
-    loading = false
   }
 
   async function loadHnItem(id: number) {
     const item = await hnClient.fetchItem(id)
     if (!item || !('title' in item)) {
       flagged = true
+      storyLoading = false
       return
     }
     const story = item as Story
@@ -132,9 +136,15 @@
     commentCount = story.descendants ?? 0
     sourceUrl = `https://news.ycombinator.com/item?id=${id}`
     tags = []
+    storyLoading = false
 
     if (story.kids?.length) {
-      comments = await fetchHnCommentTree(hnClient, story.kids)
+      commentsLoading = true
+      try {
+        comments = await fetchHnCommentTree(hnClient, story.kids)
+      } finally {
+        commentsLoading = false
+      }
     }
   }
 
@@ -149,14 +159,20 @@
     commentCount = result.story.commentCount
     sourceUrl = result.story.sourceUrl
     tags = result.story.tags ?? []
+    storyLoading = false
     comments = result.comments
   }
 
   async function loadDevtoItem(id: number) {
-    const [article, articleComments] = await Promise.all([
-      devtoClient.fetchArticle(id),
-      devtoClient.fetchComments(id),
-    ])
+    // Race the two requests independently so the article paints as soon as it lands,
+    // even if comments take longer.
+    const articlePromise = devtoClient.fetchArticle(id)
+    commentsLoading = true
+    const commentsPromise = devtoClient.fetchComments(id).finally(() => {
+      commentsLoading = false
+    })
+
+    const article = await articlePromise
     title = article.title
     url = article.url
     bodyText = article.text
@@ -166,7 +182,9 @@
     commentCount = article.commentCount
     sourceUrl = article.sourceUrl
     tags = article.tags ?? []
-    comments = articleComments
+    storyLoading = false
+
+    comments = await commentsPromise
   }
 
   async function refreshComments() {
@@ -368,7 +386,7 @@
   }
 </script>
 
-{#if loading}
+{#if storyLoading}
   <p class="loading">Loading...</p>
 {:else if flagged}
   <p class="flagged">This item has been flagged or removed.</p>
@@ -486,7 +504,9 @@
         </div>
       </div>
     {/if}
-    {#if displayedComments.length > 0}
+    {#if commentsLoading && comments.length === 0}
+      <p class="comments-loading">Loading comments...</p>
+    {:else if displayedComments.length > 0}
       {#key refreshKey}
         <CommentTree
           comments={displayedComments}
@@ -853,6 +873,12 @@
   .no-comments {
     color: var(--color-text-faint);
     padding: 16px 0;
+  }
+
+  .comments-loading {
+    color: var(--color-text-muted);
+    padding: 16px 0;
+    font-size: 0.85rem;
   }
 
   .tag-pill {
