@@ -53,6 +53,57 @@ Svelte 5 reactive stores in `$lib/*.svelte.ts` files — no external state libra
 - **Caching**: LRU cache in localStorage (max 100 entries) via `$lib/summaries.svelte.ts`
 - **Models**: haiku, sonnet (default), opus — configurable in settings
 
+### Save to Obsidian
+
+The save button (`○`/`●`) on the item detail page opens a CollectionPicker dropdown. The first row, separated by a divider, is "Save to Obsidian". Flow:
+
+1. Generate the AI summary (or read it from cache).
+2. POST to `/api/obsidian-save` with `{ title, url, bodyText, summary, source, author, tags }`.
+3. The endpoint shells out to the `claude` CLI with `--allowedTools Bash,Read,Write,Edit,Glob,Grep` and a 120s timeout, prompting it to invoke the `/notetaker` skill. Default vault location: `008 Resources/Omnifeed/`.
+4. Toast notifications track the flow: `Saving to Obsidian...` → `Writing to Obsidian...` → `Saved to Obsidian` (auto-dismisses after 3s).
+
+Files: `packages/web/src/lib/toast.svelte.ts`, `packages/web/src/components/Toast.svelte`, `packages/web/src/routes/api/obsidian-save/+server.ts`. The `runClaude` spawn pattern is duplicated from `/api/summarize`; a follow-up extracts it to `packages/web/src/lib/claude-runner.ts`.
+
+### Toast Notifications
+
+`packages/web/src/lib/toast.svelte.ts` exposes `showToast(message, status?)`, `updateToast(id, message, status?)`, `dismissToast()`. One toast at a time. Loading status shows a spinning `✦`, success auto-dismisses after 3s, error persists with a dismiss button. Mounted globally in `+layout.svelte`. Positioned at `bottom: 72px` to clear the ScrollToTop button.
+
+### Item Detail Render Pipeline
+
+The page splits loading into two reactive states:
+- `storyLoading`: gates the top-level "Loading..." placeholder. Flips false the moment story metadata is set.
+- `commentsLoading`: shows "Loading comments..." inside the comments section while the tree fetches.
+
+For DEV.to, the article and comments race independently (no `Promise.all`) so the article paints first if it lands first. For HN, story populates before comment fetching begins.
+
+### HN Comment Loading (Chunked + Lazy)
+
+The original `fetchHnCommentTree` recursed unbounded depth, issuing thousands of parallel HN Firebase requests for large threads. Replaced on the page with two non-recursive functions in `packages/core/src/comments.ts`:
+
+- `fetchHnCommentBatch(client, ids, depth)`: fetches the requested IDs in one parallel pass, populates `pendingKidIds` from each comment's `kids` array. Does not descend.
+- `fetchHnCommentChildren(client, parentDepth, kidIds)`: wraps the batch fetcher with `depth = parentDepth + 1`. Used for one-level lazy expansion.
+
+Page behavior:
+- Initial HN load: first 30 root comments, no children fetched.
+- "Load 30 more comments (N remaining)" button below the tree paginates additional roots.
+- Each `CommentNode` with `pendingKidIds.length > 0` renders an inline "Show N replies" button. Click triggers `loadChildren(targetId)` on the page, which fetches direct children, splices them into the node, and reassigns `comments` for Svelte 5 reactivity.
+- Sort modes (Newest/Oldest) auto-load all remaining roots via a `$effect` watching `commentSort`, since sorting only the loaded subset would be misleading. Default mode preserves HN's chunked ranking.
+
+`CommentItem.pendingKidIds?: number[]` is the shared signal between core and the UI for "children exist but haven't been fetched."
+
+### In-App Link Routing
+
+Links inside comment and post bodies that point to other Omnifeed-supported items get rewritten to internal routes, so they navigate inside the app instead of opening externally.
+
+- `packages/core/src/links.ts`: `toInternalRoute(url)` matches `news.ycombinator.com/item?id=N` → `/item/hn:N` and `lobste.rs/s/SHORTID` → `/item/lo:SHORTID`. Pure string parsing, returns null for unsupported URLs.
+- `packages/web/src/lib/internal-links.ts`: `rewriteInternalLinks(html)` walks anchor tags via `DOMParser`, swaps qualifying hrefs, preserves the original in `data-original-href`, strips `target`/`rel` so navigation stays in-tab. Browser-only; SSR pass-through.
+
+Applied in `CommentNode.svelte` (comment body) and `+page.svelte` (story body) after `sanitizeHtml`.
+
+HN's `/item` route serves stories AND comments. `resolveHnRootStory(client, id)` walks the parent chain (cap of 50 hops) when the requested item is a comment, returns the root story plus the original comment ID. The page replaces the address bar with the resolved story ID via `history.replaceState`. If the original comment is in the initial 30-root chunk, focus mode auto-scopes to it; deeper comments require ancestor-chain fetching (deferred).
+
+DEV.to URLs aren't supported yet (slug-based, would need API resolution).
+
 ### Feed Story Cards
 
 Each `StoryCard.svelte` has an expandable panel with:
@@ -74,7 +125,7 @@ pnpm test && pnpm check
 
 # 2. Browser walkthrough (after features or large changes)
 # Use playwright-cli to interactively verify the app
-playwright-cli open http://localhost:5174
+playwright-cli open http://localhost:5173
 
 # 3. Automated regression suite (optional, for broad changes)
 python3 scripts/test_regression.py
@@ -101,7 +152,7 @@ Use `playwright-cli` for interactive browser verification after significant chan
 
 Key commands:
 ```bash
-playwright-cli open http://localhost:5174       # open browser
+playwright-cli open http://localhost:5173       # open browser
 playwright-cli snapshot --depth=3 "main"        # inspect DOM
 playwright-cli click ".story-card >> nth=0"     # click first story
 playwright-cli eval "document.querySelector('.tab.active')?.textContent"
