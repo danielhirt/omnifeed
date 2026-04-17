@@ -6,6 +6,7 @@ import {
   fetchHnCommentTree,
   fetchHnCommentBatch,
   fetchHnCommentChildren,
+  resolveHnRootStory,
 } from '../src/comments.js'
 
 function makeComment(id: number, overrides: Partial<Comment> = {}): Comment {
@@ -236,6 +237,73 @@ describe('fetchHnCommentBatch', () => {
     const client = makeMockClient(() => Promise.resolve(comment))
     const result = await fetchHnCommentBatch(client, [1])
     expect(result[0].pendingKidIds).toBeUndefined()
+  })
+})
+
+function makeStory(id: number, kids: number[] = []) {
+  return { id, title: `Story ${id}`, type: 'story', score: 10, by: 'op', time: 1700000000, descendants: kids.length, kids }
+}
+
+describe('resolveHnRootStory', () => {
+  it('returns the story directly when ID is already a story', async () => {
+    const story = makeStory(100, [200, 300])
+    const client = makeMockClient(() => Promise.resolve(story))
+    const result = await resolveHnRootStory(client, 100)
+    expect(result?.story.id).toBe(100)
+    expect(result?.originalCommentId).toBeNull()
+    expect(client.fetchItem).toHaveBeenCalledTimes(1)
+  })
+
+  it('walks up one level from comment to story', async () => {
+    const story = makeStory(100, [200])
+    const comment = makeComment(200, { parent: 100 })
+    const map = new Map<number, unknown>([[100, story], [200, comment]])
+    const client = makeMockClient((id) => Promise.resolve(map.get(id) ?? null))
+
+    const result = await resolveHnRootStory(client, 200)
+    expect(result?.story.id).toBe(100)
+    expect(result?.originalCommentId).toBe(200)
+    expect(client.fetchItem).toHaveBeenCalledTimes(2)
+  })
+
+  it('walks up multiple levels of nested comments', async () => {
+    const story = makeStory(100)
+    const c1 = makeComment(200, { parent: 100 })
+    const c2 = makeComment(300, { parent: 200 })
+    const c3 = makeComment(400, { parent: 300 })
+    const map = new Map<number, unknown>([[100, story], [200, c1], [300, c2], [400, c3]])
+    const client = makeMockClient((id) => Promise.resolve(map.get(id) ?? null))
+
+    const result = await resolveHnRootStory(client, 400)
+    expect(result?.story.id).toBe(100)
+    // originalCommentId is the *original* requested ID, not the immediate parent
+    expect(result?.originalCommentId).toBe(400)
+    expect(client.fetchItem).toHaveBeenCalledTimes(4)
+  })
+
+  it('returns null when the chain breaks (missing parent)', async () => {
+    const c1 = makeComment(200, { parent: 999 })
+    const map = new Map<number, unknown>([[200, c1]])
+    const client = makeMockClient((id) => Promise.resolve(map.get(id) ?? null))
+
+    const result = await resolveHnRootStory(client, 200)
+    expect(result).toBeNull()
+  })
+
+  it('returns null when initial item is missing', async () => {
+    const client = makeMockClient(() => Promise.resolve(null))
+    const result = await resolveHnRootStory(client, 999)
+    expect(result).toBeNull()
+  })
+
+  it('caps the walk at 50 hops to avoid infinite loops on bad data', async () => {
+    // Self-referencing comment (parent points to self) should terminate
+    const looped = makeComment(1, { parent: 1 })
+    const client = makeMockClient(() => Promise.resolve(looped))
+    const result = await resolveHnRootStory(client, 1)
+    expect(result).toBeNull()
+    // Stops at MAX_PARENT_WALK = 50
+    expect(client.fetchItem).toHaveBeenCalledTimes(50)
   })
 })
 

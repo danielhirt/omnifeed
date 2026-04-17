@@ -1,4 +1,4 @@
-import type { Comment, CommentItem } from './models.js'
+import type { Comment, CommentItem, Story } from './models.js'
 import type { HnClient } from './client.js'
 
 export function hnCommentToItem(comment: Comment, depth: number): CommentItem {
@@ -88,4 +88,39 @@ export function fetchHnCommentChildren(
   kidIds: number[],
 ): Promise<CommentItem[]> {
   return fetchHnCommentBatch(client, kidIds, parentDepth + 1)
+}
+
+const MAX_PARENT_WALK = 50
+
+/**
+ * Resolve an HN item ID to its root story. HN's /item route is shared between
+ * stories and comments — a URL like /item?id=12345 may point to either. When
+ * a user follows a link to a comment, we want to load the parent story so the
+ * detail page works.
+ *
+ * If `id` is already a story, returns immediately with `originalCommentId =
+ * null`. If it's a comment, walks via `parent` until a story is found and
+ * returns the original ID so the caller can focus on that comment in the
+ * loaded tree.
+ *
+ * Returns null if the chain breaks (item missing) or exceeds MAX_PARENT_WALK.
+ */
+export async function resolveHnRootStory(
+  client: HnClient,
+  id: number,
+): Promise<{ story: Story; originalCommentId: number | null } | null> {
+  let originalCommentId: number | null = null
+  let currentId = id
+
+  for (let i = 0; i < MAX_PARENT_WALK; i++) {
+    const item = await client.fetchItem(currentId)
+    if (!item) return null
+    if ('title' in item) {
+      return { story: item as Story, originalCommentId }
+    }
+    if (!('parent' in item)) return null
+    if (originalCommentId === null) originalCommentId = id
+    currentId = (item as Comment).parent
+  }
+  return null
 }

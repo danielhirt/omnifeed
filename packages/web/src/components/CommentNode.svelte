@@ -2,6 +2,7 @@
   import { SOURCE_ID, type CommentItem } from '@omnifeed/core'
   import { timeAgo } from '$lib/time'
   import { sanitizeHtml } from '$lib/sanitize'
+  import { rewriteInternalLinks } from '$lib/internal-links'
   import CommentTree from './CommentTree.svelte'
 
   let {
@@ -96,7 +97,7 @@
         {/if}
       </div>
       {#if !collapsed}
-        <div class="comment-body">{@html sanitizeHtml(comment.text)}</div>
+        <div class="comment-body">{@html rewriteInternalLinks(sanitizeHtml(comment.text))}</div>
         {#if loadingChildren}
           <span class="children-loading">Loading replies...</span>
         {:else if hasPendingKids && comment.children.length === 0}

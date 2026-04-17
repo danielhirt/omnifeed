@@ -5,7 +5,7 @@
     type Story, type FeedItem, type CommentItem, type ContentSource,
     SOURCES, SOURCE_ID, parseItemId, buildItemId,
   } from '@omnifeed/core'
-  import { fetchHnCommentBatch, fetchHnCommentChildren } from '@omnifeed/core'
+  import { fetchHnCommentBatch, fetchHnCommentChildren, resolveHnRootStory } from '@omnifeed/core'
   import { timeAgo, domainFrom } from '$lib/time'
   import CommentTree from '../../../components/CommentTree.svelte'
   import SaveButton from '../../../components/SaveButton.svelte'
@@ -15,6 +15,7 @@
   import { getSettings } from '$lib/settings.svelte'
   import { sortCommentTree, type CommentSortMode } from '$lib/sort-filter'
   import { sanitizeHtml } from '$lib/sanitize'
+  import { rewriteInternalLinks } from '$lib/internal-links'
   import { showToast, updateToast } from '$lib/toast.svelte'
 
   const hnClient = new HnClient()
@@ -130,13 +131,13 @@
   }
 
   async function loadHnItem(id: number) {
-    const item = await hnClient.fetchItem(id)
-    if (!item || !('title' in item)) {
+    const resolved = await resolveHnRootStory(hnClient, id)
+    if (!resolved) {
       flagged = true
       storyLoading = false
       return
     }
-    const story = item as Story
+    const { story, originalCommentId } = resolved
     title = story.title
     url = story.url
     bodyText = story.text
@@ -144,9 +145,15 @@
     author = story.by
     timestamp = story.time
     commentCount = story.descendants ?? 0
-    sourceUrl = `https://news.ycombinator.com/item?id=${id}`
+    sourceUrl = `https://news.ycombinator.com/item?id=${story.id}`
     tags = []
     storyLoading = false
+
+    // Replace the address bar with the resolved story ID so refreshes don't
+    // walk the parent chain again, and the URL matches what the user sees.
+    if (originalCommentId !== null && story.id !== Number(sourceId)) {
+      history.replaceState(null, '', `/item/hn:${story.id}`)
+    }
 
     if (story.kids?.length) {
       commentsLoading = true
@@ -155,6 +162,15 @@
         const initial = allKids.slice(0, ROOT_CHUNK)
         pendingRootIds = allKids.slice(ROOT_CHUNK)
         comments = await fetchHnCommentBatch(hnClient, initial)
+        // Best-effort: if the user came in via a comment link and that comment
+        // is in the initial chunk, focus on it. Deeper or later comments are
+        // not auto-focused (would require recursive child fetching).
+        if (originalCommentId !== null) {
+          const targetId = `hn:${originalCommentId}`
+          if (comments.some(c => c.id === targetId)) {
+            focusStack = [targetId]
+          }
+        }
       } finally {
         commentsLoading = false
       }
@@ -549,7 +565,7 @@
 
   {#if bodyText}
     <div class="story-body-wrapper">
-      <div class="story-body">{@html sanitizeHtml(bodyText)}</div>
+      <div class="story-body">{@html rewriteInternalLinks(sanitizeHtml(bodyText))}</div>
       <button class="post-copy-btn" onclick={copyPost} title="Copy post text and link">
         {postCopied ? '✓' : '⧉'}
       </button>
