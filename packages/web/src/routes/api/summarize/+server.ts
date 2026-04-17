@@ -104,7 +104,7 @@ function buildPrompt(story: Story, articleText: string, comments: Comment[]): st
 const MODEL_MAP: Record<string, string> = {
   haiku: 'claude-haiku-4-5-20251001',
   sonnet: 'claude-sonnet-4-6',
-  opus: 'claude-opus-4-6',
+  opus: 'claude-opus-4-7',
 }
 
 const CLAUDE_TIMEOUT_MS = 90_000
