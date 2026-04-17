@@ -49,6 +49,9 @@
   const ROOT_CHUNK = 30
   let pendingRootIds = $state<number[]>([])
   let loadingMoreRoots = $state(false)
+  // Set true when Newest/Oldest sort triggers an auto-fetch of remaining roots.
+  // Distinguishes the explicit "Load more" click from the implicit sort load.
+  let autoLoadingForSort = $state(false)
 
   let domain = $derived(domainFrom(url))
   let sourceConfig = $derived(SOURCES.find(s => s.id === source))
@@ -109,6 +112,7 @@
     focusStack = []
     comments = []
     pendingRootIds = []
+    autoLoadingForSort = false
 
     try {
       if (src === SOURCE_ID.HN) {
@@ -172,6 +176,34 @@
       loadingMoreRoots = false
     }
   }
+
+  // When the user picks Newest or Oldest, sorting only the loaded subset is
+  // misleading — the actual newest comment may live among the unfetched IDs.
+  // Fetch the rest in one parallel pass and append; the sort then reflects
+  // the full root set. Default mode keeps the chunked behavior.
+  async function loadAllRemainingRoots() {
+    if (autoLoadingForSort || pendingRootIds.length === 0) return
+    autoLoadingForSort = true
+    try {
+      const remaining = pendingRootIds
+      pendingRootIds = []
+      const batch = await fetchHnCommentBatch(hnClient, remaining)
+      comments = [...comments, ...batch]
+    } finally {
+      autoLoadingForSort = false
+    }
+  }
+
+  $effect(() => {
+    if (
+      source === SOURCE_ID.HN &&
+      commentSort !== 'default' &&
+      pendingRootIds.length > 0 &&
+      !autoLoadingForSort
+    ) {
+      loadAllRemainingRoots()
+    }
+  })
 
   // Lazy-fetch a comment's children when expanded. Mutates the tree in place
   // by replacing the matching CommentItem and reassigning `comments` for
@@ -537,6 +569,9 @@
         <div class="controls-left">
           <span class="comments-label">Comments</span>
           <span class="comments-count">{displayedCount}</span>
+          {#if autoLoadingForSort}
+            <span class="sort-loading">Loading remaining for sort...</span>
+          {/if}
         </div>
         <div class="controls-right">
           <button class="control-btn" class:active={commentSort === 'default'} onclick={() => commentSort = 'default'}>Default</button>
@@ -1011,6 +1046,12 @@
   .comments-count {
     font-size: 0.75rem;
     color: var(--color-text-faint);
+  }
+
+  .sort-loading {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    margin-left: 8px;
   }
 
   .controls-sep {

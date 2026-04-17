@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render } from '@testing-library/svelte'
+import { render, fireEvent } from '@testing-library/svelte'
 import Page from '../src/routes/item/[id]/+page.svelte'
 
 // Mock SvelteKit's $app/state to provide the route param
@@ -139,5 +139,149 @@ describe('item page story-first loading', () => {
     })
     expect(container.querySelector('.comments-loading')).toBeFalsy()
     expect(container.querySelector('.no-comments')).toBeTruthy()
+  })
+})
+
+describe('item page chunked HN root loading', () => {
+  // Build a story with 50 kids so initial chunk (30) leaves 20 pending
+  const ROOT_KIDS = Array.from({ length: 50 }, (_, i) => 1000 + i)
+  const STORY_50 = { ...STORY_FIXTURE, descendants: 50, kids: ROOT_KIDS }
+
+  function makeFakeFetch() {
+    const calls: string[] = []
+    const fetchFn = vi.fn(async (url: string) => {
+      calls.push(url)
+      if (url.endsWith(`/item/${STORY_50.id}.json`)) {
+        return new Response(JSON.stringify(STORY_50), { status: 200 })
+      }
+      // Comment fetch: extract id and return a comment fixture
+      const match = url.match(/\/item\/(\d+)\.json$/)
+      const id = match ? Number(match[1]) : 0
+      return new Response(JSON.stringify({
+        id,
+        text: `Comment ${id}`,
+        by: `user${id}`,
+        time: id,  // Use id as timestamp so we can verify sort order
+        parent: STORY_50.id,
+      }), { status: 200 })
+    })
+    vi.stubGlobal('fetch', fetchFn)
+    return { fetchFn, calls }
+  }
+
+  it('initial render fetches only ROOT_CHUNK (30) roots, not all 50', async () => {
+    const { fetchFn } = makeFakeFetch()
+    const { container } = render(Page)
+
+    await vi.waitFor(() => {
+      const tree = container.querySelector('.comment-tree')
+      expect(tree?.querySelectorAll(':scope > .comment-node').length).toBe(30)
+    })
+
+    // 1 story fetch + 30 comment fetches = 31 total
+    expect(fetchFn).toHaveBeenCalledTimes(31)
+  })
+
+  it('shows "Load more comments" button with remaining count', async () => {
+    makeFakeFetch()
+    const { container } = render(Page)
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('.load-more-btn')).toBeTruthy()
+    })
+    const btn = container.querySelector('.load-more-btn')!
+    // 50 - 30 = 20 remaining
+    expect(btn.textContent).toContain('20 remaining')
+  })
+
+  it('clicking Newest sort triggers auto-load of remaining roots', async () => {
+    const { fetchFn } = makeFakeFetch()
+    const { container } = render(Page)
+
+    // Wait for initial 30 roots
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('.comment-tree > .comment-node').length).toBe(30)
+    })
+    const callsBeforeSort = fetchFn.mock.calls.length
+
+    // Click Newest
+    const buttons = container.querySelectorAll('.controls-right .control-btn')
+    const newestBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Newest')!
+    await fireEvent.click(newestBtn)
+
+    // Auto-load indicator should appear
+    expect(container.querySelector('.sort-loading')).toBeTruthy()
+
+    // Wait for all roots to load
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('.comment-tree > .comment-node').length).toBe(50)
+    })
+
+    // Indicator gone
+    expect(container.querySelector('.sort-loading')).toBeFalsy()
+    // "Load more" button hidden (nothing pending)
+    expect(container.querySelector('.load-more-btn')).toBeFalsy()
+    // 20 additional fetches were issued
+    expect(fetchFn.mock.calls.length).toBe(callsBeforeSort + 20)
+  })
+
+  it('clicking Oldest also triggers auto-load', async () => {
+    const { fetchFn } = makeFakeFetch()
+    const { container } = render(Page)
+
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('.comment-tree > .comment-node').length).toBe(30)
+    })
+    const callsBeforeSort = fetchFn.mock.calls.length
+
+    const buttons = container.querySelectorAll('.controls-right .control-btn')
+    const oldestBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Oldest')!
+    await fireEvent.click(oldestBtn)
+
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('.comment-tree > .comment-node').length).toBe(50)
+    })
+    expect(fetchFn.mock.calls.length).toBe(callsBeforeSort + 20)
+  })
+
+  it('Default sort does NOT trigger auto-load', async () => {
+    const { fetchFn } = makeFakeFetch()
+    const { container } = render(Page)
+
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('.comment-tree > .comment-node').length).toBe(30)
+    })
+    const callsBeforeSort = fetchFn.mock.calls.length
+
+    const buttons = container.querySelectorAll('.controls-right .control-btn')
+    const defaultBtn = Array.from(buttons).find(b => b.textContent?.trim() === 'Default')!
+    await fireEvent.click(defaultBtn)
+
+    // Give the effect a chance to fire
+    await new Promise(r => setTimeout(r, 50))
+
+    // No new fetches; still showing 30
+    expect(fetchFn.mock.calls.length).toBe(callsBeforeSort)
+    expect(container.querySelectorAll('.comment-tree > .comment-node').length).toBe(30)
+    expect(container.querySelector('.sort-loading')).toBeFalsy()
+    expect(container.querySelector('.load-more-btn')).toBeTruthy()
+  })
+
+  it('clicking "Load more comments" appends the next chunk', async () => {
+    const { fetchFn } = makeFakeFetch()
+    const { container } = render(Page)
+
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('.comment-tree > .comment-node').length).toBe(30)
+    })
+    const callsBeforeMore = fetchFn.mock.calls.length
+
+    const moreBtn = container.querySelector('.load-more-btn') as HTMLButtonElement
+    await fireEvent.click(moreBtn)
+
+    await vi.waitFor(() => {
+      expect(container.querySelectorAll('.comment-tree > .comment-node').length).toBe(50)
+    })
+    expect(fetchFn.mock.calls.length).toBe(callsBeforeMore + 20)
   })
 })
